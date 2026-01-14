@@ -67,6 +67,20 @@ uv run main.py --debug
 uv run main.py --dry-run --debug
 ```
 
+## Running Tests
+
+This project uses `pytest` for testing.
+
+To run all tests:
+```bash
+uv run pytest
+```
+
+To run tests with coverage:
+```bash
+uv run pytest --cov=.
+```
+
 ## Project Structure
 
 -   `main.py`: CLI entry point.
@@ -74,3 +88,54 @@ uv run main.py --dry-run --debug
 -   `api/`: ActivityInfo API client and models.
 -   `parser/`: Expression parser and evaluator using `lark`.
 -   `models.py`: Data models for changesets.
+
+## Language Syntax
+
+The tool supports a custom expression language similar to Excel formulas.
+
+### Operators
+
+| Type       | Operators                       |
+|------------|---------------------------------|
+| Arithmetic | `+`, `-`, `*`, `/`              |
+| Comparison | `==`, `!=`, `<`, `>`, `<=`, `>=` |
+| Logical    | `&&` (AND), \|\| (OR), `!` (NOT) |
+
+### Functions
+
+#### Logical & Control Flow
+- `IF(condition, true_value, [false_value])`
+- `ANY(value1, value2, ...)` - Returns true if any argument is true.
+- `COALESCE(value1, value2, ...)` - Returns the first non-null/non-empty value.
+
+#### Math
+- `SUM(number1, ...)`
+- `AVERAGE(number1, ...)`
+- `MIN(number1, ...)`
+- `MAX(number1, ...)`
+- `ROUND(number, [digits])`
+- `CEIL(number)`
+- `FLOOR(number)`
+- `POWER(base, exponent)`
+- `ISNUMBER(value)`
+
+#### Text
+- `CONCAT(text1, text2, ...)`
+- `LEFT(text, number_of_chars)`
+- `RIGHT(text, number_of_chars)`
+- `MID(text, start_position, number_of_chars)`
+- `LOWER(text)`
+- `TRIM(text)`
+- `TEXT(value)` - Converts value to string.
+- `VALUE(text)` - Converts text to number.
+- `SEARCH(find_text, within_text, [start_position])`
+- `ISBLANK(value)`
+
+#### Aggregation
+- `COUNT(value1, ...)` - Counts non-empty values.
+- `COUNTDISTINCT(value1, ...)` - Counts unique non-empty values.
+
+#### Regex
+- `REGEXMATCH(text, pattern)`
+- `REGEXEXTRACT(text, pattern)`
+- `REGEXREPLACE(text, pattern, replacement)`

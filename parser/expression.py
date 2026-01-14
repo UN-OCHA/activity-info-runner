@@ -1,20 +1,21 @@
+from typing import Any, Set
 from .parser import parse_expression
-from .ast import Comparison, IdentifierResolver
+from .ast import Expr, IdentifierResolver, evaluate_expr
 
 class ActivityInfoExpression:
-    def __init__(self, expr: Comparison):
+    def __init__(self, expr: Expr):
         self._expr = expr
 
     @classmethod
     def parse(cls, text: str) -> "ActivityInfoExpression":
         return cls(parse_expression(text))
 
-    def evaluate(self, resolver: IdentifierResolver) -> bool:
-        return self._expr.evaluate(resolver)
+    def evaluate(self, resolver: IdentifierResolver) -> Any:
+        return evaluate_expr(self._expr, resolver)
 
     @property
-    def identifiers(self) -> set[str]:
-        return {".".join(self._expr.left.parts)}
+    def identifiers(self) -> Set[str]:
+        return self._expr.identifiers()
 
     def __str__(self) -> str:
         return self._expr.to_string()

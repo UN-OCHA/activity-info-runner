@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Optional, Dict, Any
 
 class OwnerRef(BaseModel):
@@ -67,11 +67,10 @@ class DatabaseTree(BaseModel):
     securityCategories: List[Dict[str, str]]
 
 class FormFields(BaseModel):
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str = Field(alias='@id')
     last_edit_time: float = Field(alias='@lastEditTime')
-
-    class Config:
-        populate_by_name = True
 
 class OperationCalculationFormulasField(FormFields):
     ref_order: int = Field(alias='REFORDER')
