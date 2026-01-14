@@ -1,0 +1,13 @@
+[project]
+name = "activity-info-runner"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.11"
+dependencies = [
+    "httpx",
+    "pydantic",
+    "python-dotenv",
+    "lark",
+    "aiocache[redis]>=0.12.3",
+    "rich>=14.2.0",
+]
