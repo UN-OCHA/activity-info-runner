@@ -6,6 +6,7 @@ _parser = Lark(GRAMMAR, parser="lalr")
 
 
 class _Transformer(Transformer):
+    """Transforms the parse tree into an AST."""
     def dotted_name(self, items):
         return Identifier([str(i) for i in items])
 
@@ -54,5 +55,6 @@ class _Transformer(Transformer):
 
 
 def parse_expression(text: str):
+    """Parses the given expression text into an AST node."""
     tree = _parser.parse(text)
     return _Transformer().transform(tree)

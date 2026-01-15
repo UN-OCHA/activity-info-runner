@@ -23,6 +23,7 @@ async def main(dry_run: bool, database_id: str):
 
 
 if __name__ == '__main__':
+    # Usage: python main.py [--debug] [--dry-run] <database_id>
     parser = argparse.ArgumentParser(description="Activity Info Runner")
     parser.add_argument(
         "--debug", "-d",

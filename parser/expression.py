@@ -3,6 +3,7 @@ from .parser import parse_expression
 from .ast import Expr, IdentifierResolver, evaluate_expr
 
 class ActivityInfoExpression:
+    """Represents an ActivityInfo expression that can be parsed and evaluated."""
     def __init__(self, expr: Expr):
         self._expr = expr
 

@@ -11,6 +11,7 @@ class IdentifierResolver(Protocol):
 # ---------- Expression Evaluation ----------
 
 def evaluate_expr(expr: Expr, resolver: IdentifierResolver) -> Any:
+    """Evaluates an expression using the provided identifier resolver."""
     if isinstance(expr, Identifier):
         return resolver.resolve(expr)
     if isinstance(expr, Number):
@@ -31,6 +32,7 @@ def evaluate_expr(expr: Expr, resolver: IdentifierResolver) -> Any:
 # ---------- Core ----------
 
 class ExprNode:
+    """Base class for all expression nodes."""
     def to_string(self) -> str:
         return str(self)
     
@@ -40,6 +42,7 @@ class ExprNode:
 
 @dataclass(frozen=True)
 class Identifier(ExprNode):
+    """Represents an identifier, possibly dotted (e.g., user.name)."""
     parts: List[str]
 
     def __str__(self) -> str:
@@ -50,6 +53,7 @@ class Identifier(ExprNode):
 
 @dataclass(frozen=True)
 class String(ExprNode):
+    """Represents a string literal."""
     value: str
 
     def __str__(self) -> str:
@@ -59,6 +63,7 @@ class String(ExprNode):
 
 @dataclass(frozen=True)
 class Number:
+    """Represents a numeric literal."""
     value: float
 
     def __str__(self) -> str:
@@ -67,6 +72,7 @@ class Number:
 
 @dataclass(frozen=True)
 class BinaryOp(ExprNode):
+    """Represents a binary operation (e.g., addition, multiplication, logical AND)."""
     left: "Expr"
     op: str
     right: "Expr"
@@ -90,7 +96,6 @@ class BinaryOp(ExprNode):
             return l - r
         if self.op == "/":
             return l / r
-        
         raise ValueError(f"Unknown operator: {self.op}")
 
     def __str__(self) -> str:
@@ -102,6 +107,7 @@ class BinaryOp(ExprNode):
 
 @dataclass(frozen=True)
 class UnaryOp(ExprNode):
+    """Represents a unary operation (e.g., logical NOT)."""
     op: str
     operand: "Expr"
 
@@ -121,6 +127,7 @@ class UnaryOp(ExprNode):
 
 @dataclass(frozen=True)
 class Comparison(ExprNode):
+    """Represents a comparison operation (e.g., ==, !=, <, >)."""
     left: "Expr"
     op: str
     right: "Expr"
@@ -149,6 +156,7 @@ class Comparison(ExprNode):
 
 @dataclass(frozen=True)
 class FunctionCall(ExprNode):
+    """Represents a function call (e.g., SUM(a, b), IF(cond, true_val, false_val))."""
     name: str
     args: List["Expr"]
 

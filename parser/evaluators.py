@@ -2,6 +2,7 @@ from typing import Dict, Any
 from .ast import Identifier
 
 class DictResolver:
+    """Resolves identifiers against a nested dictionary."""
     def __init__(self, data: Dict[str, Any]):
         self._data = data
 
