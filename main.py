@@ -17,13 +17,9 @@ async def main(dry_run: bool, database_id: str):
         raise ValueError("API_TOKEN environment variable is not set")
 
     async with ActivityInfoClient(BASE_URL, api_token=os.getenv("API_TOKEN")) as client:
-        form_changeset, record_changeset, errors_report = await get_operation_calculation_changesets(client, database_id)
-        form_changeset.pretty_print_table()
-        record_changeset.pretty_print_table()
-        errors_report.pretty_print_table()
+        form_changeset, record_changeset, error_dtos = await get_operation_calculation_changesets(client, database_id)
 
         if not dry_run:
-            error_dtos = [e.as_form_update_dto() for e in errors_report.entries]
             await client.api.update_form_records(error_dtos)
             logging.info("Updated operation calculation error records in Activity Info.")
 

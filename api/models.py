@@ -82,6 +82,7 @@ class OperationCalculationFormulasField(FormFields):
 
     filter: Optional[str] = Field(alias='FILTER')
     formula: Optional[str] = Field(alias='FORMULA')
+    errors: Optional[str] = Field(alias='ERRS')
 
 class TypeParameterLookupConfig(BaseModel):
     id: str

@@ -5,7 +5,7 @@ from typing import List, Optional, Tuple, Dict
 from api import ActivityInfoClient
 from api.models import OperationCalculationFormulasField
 from models import FormChangeset, FormChangesetEntry, FormChangesetPlan, RecordChangesetEntry, RecordChangeset, \
-    FieldErrorReport, FieldErrorEntry
+    FieldErrorReport, FieldErrorEntry, FormRecordUpdateDTO
 from parser import ActivityInfoExpression, RecordResolver
 from utils import build_nested_dict
 
@@ -22,8 +22,8 @@ class DatabaseTreeResourceType(StrEnum):
     OTHER = auto()
 
 
-async def get_operation_calculation_changesets(client: ActivityInfoClient, database_id: str) -> Tuple[
-    FormChangeset, RecordChangeset, FieldErrorReport]:
+async def get_operation_calculation_changesets(client: ActivityInfoClient, database_id: str) -> tuple[
+    FormChangeset, RecordChangeset, list[FormRecordUpdateDTO]]:
     """Generates changesets for operation calculation formulas in the specified database.
     Args:
         client: An instance of ActivityInfoClient to interact with the API.
@@ -32,7 +32,7 @@ async def get_operation_calculation_changesets(client: ActivityInfoClient, datab
         A tuple containing:
             - FormChangeset for internal operation calculation formulas.
             - RecordChangeset for external operation calculation formulas.
-            - FieldErrorReport for any errors encountered during processing.
+            - A list of FormRecordUpdateDTO representing any errors encountered.
     """
     # 1: Locate the operation calculation formulas form
     database_tree = await client.api.get_database_tree(database_id)
@@ -44,10 +44,10 @@ async def get_operation_calculation_changesets(client: ActivityInfoClient, datab
         raise ValueError("Operation Calculation Formulas form not found in the database tree")
 
     # 2: Fetch the rows specifying operation calculation formulas
-    res = await client.api.get_operation_calculation_formulas_fields(form_id)
-    logging.info(f"Retrieved {len(res)} operation calculation formula fields")
-    internal_fields = [field for field in res if field.apply == OperationCalculationApplyType.INTERNAL]
-    external_fields = [field for field in res if field.apply == OperationCalculationApplyType.EXTERNAL]
+    fields = await client.api.get_operation_calculation_formulas_fields(form_id)
+    logging.info(f"Retrieved {len(fields)} operation calculation formula fields")
+    internal_fields = [field for field in fields if field.apply == OperationCalculationApplyType.INTERNAL]
+    external_fields = [field for field in fields if field.apply == OperationCalculationApplyType.EXTERNAL]
 
     # 3: Generate internal changeset entries (to replace form schema formulas)
     internal_changeset, internal_errors = await get_internal_operation_calculation_changeset_entries(client,
@@ -67,13 +67,20 @@ async def get_operation_calculation_changesets(client: ActivityInfoClient, datab
                                    title="Internal Changeset")
     record_changeset = RecordChangeset(entries=external_changeset, action="operation_calculation_formulas",
                                        title="External Changeset")
+
+    form_changeset.pretty_print_table()
+    record_changeset.pretty_print_table()
+
     errors = internal_errors + external_errors
     for i in range(len(errors)):
         errors[i].form_id = form_id
         errors[i].form_name = "0.1.5_Operation_Calculation_Formulas"
-    errors_report = FieldErrorReport(title="0.1.5 Operation Calculation Formulas Field Errors", entries=errors)
+    report = FieldErrorReport(entries=errors, title="Operation Calculation Formula Errors")
+    report.pretty_print_table()
+    error_dtos = [e.as_form_update_dto() for e in errors]
+    error_dtos.extend(revert_extra_errors(form_id, errors, fields))
 
-    return form_changeset, record_changeset, errors_report
+    return form_changeset, record_changeset, error_dtos
 
 
 def parse_expressions_with_errors(
@@ -367,3 +374,31 @@ async def collect_field_mappings(client: ActivityInfoClient, start_form_id: str)
     logging.info(f"Collected {len(mappings)} field mappings across {len(visited_forms)} forms")
 
     return mappings
+
+def revert_extra_errors(form_id: str, existing_errors: List[FieldErrorEntry], fields: List[OperationCalculationFormulasField]) -> List[FormRecordUpdateDTO]:
+    """Identifies fields that previously had errors but are now resolved, creating revert error entries.
+    Args:
+        existing_errors: A list of existing FieldErrorEntry objects.
+        fields: A list of OperationCalculationFormulasField objects.
+    Returns:
+        A list of FormRecordUpdateDTO objects representing revert error entries.
+    """
+    # A field's current error is found in field.errors (non-null)
+    error_field_ids = {error.record_id for error in existing_errors}
+    revert_errors: List[FormRecordUpdateDTO] = []
+
+    for field in fields:
+        if field.id in error_field_ids:
+            continue
+        if field.errors is not None:
+            revert_errors.append(FormRecordUpdateDTO(
+                formId=form_id,
+                recordId=field.id,
+                parentRecordId=None,
+                deleted=False,
+                fields={
+                    "ERRS": ""
+                },
+            ))
+            logging.info(f"Creating revert error entry for field {field.id} as errors are now resolved")
+    return revert_errors
