@@ -18,7 +18,12 @@ class DatabaseTreeResourceType(StrEnum):
     FORM = "FORM"
     OTHER = auto()
 
-async def get_operation_calculation_changesets(client: ActivityInfoClient, database_id: str, form_id: str) -> Tuple[FormChangeset, RecordChangeset]:
+async def get_operation_calculation_changesets(client: ActivityInfoClient, database_id: str) -> Tuple[FormChangeset, RecordChangeset]:
+    database_tree = await client.api.get_database_tree(database_id)
+    form_id = next(
+        (res.id for res in database_tree.resources if res.type == "FORM" and res.label.startswith("0.1.5_")),
+        None
+    )
     res = await client.api.get_operation_calculation_formulas_fields(form_id)
     logging.info(f"Retrieved {len(res)} operation calculation formula fields")
     internal_fields = [field for field in res if field.apply == OperationCalculationApplyType.INTERNAL]
@@ -40,7 +45,7 @@ async def get_internal_operation_calculation_changeset_entries(client:ActivityIn
         changeset_plans.append(FormChangesetPlan(
             calcOrder=field.ref_order,
             formId=form_id,
-            fieldCode=field.sys_field,
+            fieldCode=f"{field.sys_field}_ICALC",
             newExpression=f"IF({field.filter}, {field.formula})",
         ))
     return await resolve_internal_changeset_plans(client, database_id, changeset_plans)
@@ -106,16 +111,20 @@ async def resolve_form_id_from_prefix(client: ActivityInfoClient, database_id: s
 async def resolve_internal_changeset_plans(client: ActivityInfoClient, database_id: str, internal_changeset: List[FormChangesetPlan]) -> List[FormChangesetEntry]:
     changeset_entries: List[FormChangesetEntry] = []
     for plan in internal_changeset:
+        field_lookup = await collect_field_mappings(client, plan.form_id)
         schema = await client.api.get_form_schema(plan.form_id)
-        field_lookup = {el.id: el.code for el in schema.elements}
         code_lookup = {el.code: el.id for el in schema.elements}
         target_element = next((el for el in schema.elements if el.code == plan.field_code), None)
         if not target_element:
             logging.warning(f"Field code {plan.field_code} not found in form {plan.form_id}")
             continue
         old_expression = target_element.typeParameters.formula
-        for k, v in field_lookup.items():
-            old_expression = old_expression.replace(k, v)
+        sorted_keys = sorted(field_lookup.keys(), key=len, reverse=True)
+        for k in sorted_keys:
+            old_expression = old_expression.replace(k, field_lookup[k])
+        if old_expression == plan.new_expression:
+            logging.info(f"Skipping unchanged formula for {plan.field_code} in form {plan.form_id}")
+            continue
         changeset_entries.append(FormChangesetEntry(
             calcOrder=plan.calc_order,
             formId=plan.form_id,
@@ -125,3 +134,33 @@ async def resolve_internal_changeset_plans(client: ActivityInfoClient, database_
             oldExpression=old_expression,
         ))
     return changeset_entries
+
+async def collect_field_mappings(client: ActivityInfoClient, start_form_id: str) -> Dict[str, str]:
+    mappings = {}
+    visited_forms = set()
+    pending_forms = [start_form_id]
+
+    logging.info(f"Starting field mapping collection from form {start_form_id}")
+    while pending_forms:
+        form_id = pending_forms.pop(0)
+        if form_id in visited_forms:
+            continue
+        visited_forms.add(form_id)
+        try:
+            schema = await client.api.get_form_schema(form_id)
+        except Exception as e:
+            logging.warning(f"Failed to fetch schema for form {form_id}: {e}")
+            continue
+        for el in schema.elements:
+            if el.code:
+                mappings[el.id] = el.code
+            if el.type.upper() == "REFERENCE" and el.typeParameters and el.typeParameters.range:
+                for r in el.typeParameters.range:
+                    ref_form_id = r.get("formId") or r.get("formClassId")
+                    if ref_form_id:
+                        if ref_form_id not in visited_forms and ref_form_id not in pending_forms:
+                            logging.debug(f"Found reference to form {ref_form_id} in field {el.code or 'UNKNOWN'} ({el.id})")
+                            pending_forms.append(ref_form_id)
+    
+    logging.info(f"Collected {len(mappings)} field mappings across {len(visited_forms)} forms")
+    return mappings

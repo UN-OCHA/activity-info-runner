@@ -10,15 +10,14 @@ from api import ActivityInfoClient
 from api.client import BASE_URL
 
 
-async def main(dry_run: bool):
-    logging.basicConfig(level=logging.DEBUG)
+async def main(dry_run: bool, database_id: str):
     logging.getLogger("aiocache").setLevel(logging.WARNING)
     load_dotenv()
     api_token = os.getenv("API_TOKEN")
     if not api_token:
         raise ValueError("API_TOKEN environment variable is not set")
     async with ActivityInfoClient(BASE_URL, api_token=os.getenv("API_TOKEN")) as client:
-        form_changeset, record_changeset = await get_operation_calculation_changesets(client=client, database_id="cay0dkxmkcry89w2",form_id="c9hx7ckmkcry89xr")
+        form_changeset, record_changeset = await get_operation_calculation_changesets(client, database_id)
         form_changeset.pretty_print_table()
         record_changeset.pretty_print_table()
 
@@ -35,6 +34,11 @@ if __name__ == '__main__':
         action="store_true",
         help="Run without making changes"
     )
+    parser.add_argument(
+        "database_id",
+        type=str,
+        help="The Activity Info database ID",
+    )
     args = parser.parse_args()
     log_level = logging.DEBUG if args.debug else logging.ERROR
     logging.basicConfig(
@@ -42,4 +46,4 @@ if __name__ == '__main__':
         format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
     )
     logging.getLogger("aiocache").setLevel(logging.WARNING)
-    asyncio.run(main(dry_run=args.dry_run))
+    asyncio.run(main(dry_run=args.dry_run, database_id=args.database_id))

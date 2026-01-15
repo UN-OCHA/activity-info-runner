@@ -98,7 +98,7 @@ class TypeParameters(BaseModel):
 
 class FormElement(BaseModel):
     id: str
-    code: str
+    code: Optional[str] = None
     label: str
     description: Optional[str] = None
     relevanceCondition: Optional[str] = ""

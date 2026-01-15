@@ -88,7 +88,7 @@ async def test_get_operation_calculation_changesets():
         id="form_int", schemaVersion=1, databaseId="db1", label="Int Form",
         elements=[
             FormElement(
-                id="field_id_1", code="calc_field", label="Calc Field", type="CALCULATED",
+                id="field_id_1", code="calc_field_ICALC", label="Calc Field", type="CALCULATED",
                 typeParameters=TypeParameters(formula="old_formula")
             )
         ]
@@ -107,14 +107,14 @@ async def test_get_operation_calculation_changesets():
     mock_client.api.get_form = AsyncMock(return_value=records)
 
     # EXECUTE
-    form_changeset, record_changeset = await get_operation_calculation_changesets(mock_client, "db1", "config_form_id")
+    form_changeset, record_changeset = await get_operation_calculation_changesets(mock_client, "db1")
 
     # VERIFY INTERNAL
     assert form_changeset.action == "operation_calculation_formulas"
     assert len(form_changeset.entries) == 1
     entry = form_changeset.entries[0]
     assert entry.form_id == "form_int"
-    assert entry.field_code == "calc_field"
+    assert entry.field_code == "calc_field_ICALC"
     assert entry.field_id == "field_id_1"
     # Formula wrapped in IF(filter, formula) -> IF(true, 1 + 1)
     assert entry.new_expression == "IF(true, 1 + 1)"
