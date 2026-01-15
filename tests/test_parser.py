@@ -146,3 +146,28 @@ def test_function_round():
     assert isinstance(ast, FunctionCall)
     assert ast.name == "ROUND"
     assert len(ast.args) == 2
+    
+def test_parse_originating_identifier():
+    ast = parse_expression("@user.name")
+    assert isinstance(ast, Identifier)
+    assert ast.parts == ["user", "name"]
+    assert ast.originating is True
+    
+def test_parse_lookup():
+    ast = parse_expression("LOOKUP(\"other_form\", field == @other, value)")
+    assert isinstance(ast, FunctionCall)
+    assert ast.name == "LOOKUP"
+    assert len(ast.args) == 3
+    assert isinstance(ast.args[0], String)
+    assert isinstance(ast.args[1], Comparison)
+    assert isinstance(ast.args[2], Identifier)
+        
+def test_parse_aggregate():
+    ast = parse_expression("AGGREGATE(\"SUM\", \"other_form\", field == @other, value)")
+    assert isinstance(ast, FunctionCall)
+    assert ast.name == "AGGREGATE"
+    assert len(ast.args) == 4
+    assert isinstance(ast.args[0], String)
+    assert isinstance(ast.args[1], String)
+    assert isinstance(ast.args[2], Comparison)
+    assert isinstance(ast.args[3], Identifier)

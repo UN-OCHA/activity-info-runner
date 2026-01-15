@@ -11,8 +11,8 @@ class ActivityInfoExpression:
     def parse(cls, text: str) -> "ActivityInfoExpression":
         return cls(parse_expression(text))
 
-    def evaluate(self, resolver: IdentifierResolver) -> Any:
-        return evaluate_expr(self._expr, resolver)
+    async def evaluate(self, resolver: IdentifierResolver) -> Any:
+        return await evaluate_expr(self._expr, resolver)
 
     @property
     def identifiers(self) -> Set[str]:

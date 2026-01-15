@@ -1,12 +1,13 @@
 import logging
-from typing import List, Optional, Tuple, Any, Dict
+from enum import StrEnum, auto
+from typing import List, Optional, Tuple, Dict
 
 from api import ActivityInfoClient
 from api.models import OperationCalculationFormulasField
-from models import FormChangeset, FormChangesetEntry, FormChangesetPlan, RecordChangesetEntry, RecordChangeset
-from enum import StrEnum, auto
-
-from parser import ActivityInfoExpression, DictResolver
+from models import FormChangeset, FormChangesetEntry, FormChangesetPlan, RecordChangesetEntry, RecordChangeset, \
+    FieldErrorReport, FieldErrorEntry
+from parser import ActivityInfoExpression, RecordResolver
+from utils import build_nested_dict
 
 
 class OperationCalculationApplyType(StrEnum):
@@ -17,11 +18,12 @@ class OperationCalculationApplyType(StrEnum):
 
 class DatabaseTreeResourceType(StrEnum):
     FORM = "FORM"
+    # We do not care about other resource types for our purposes
     OTHER = auto()
 
 
 async def get_operation_calculation_changesets(client: ActivityInfoClient, database_id: str) -> Tuple[
-    FormChangeset, RecordChangeset]:
+    FormChangeset, RecordChangeset, FieldErrorReport]:
     """Generates changesets for operation calculation formulas in the specified database.
     Args:
         client: An instance of ActivityInfoClient to interact with the API.
@@ -30,57 +32,143 @@ async def get_operation_calculation_changesets(client: ActivityInfoClient, datab
         A tuple containing:
             - FormChangeset for internal operation calculation formulas.
             - RecordChangeset for external operation calculation formulas.
+            - FieldErrorReport for any errors encountered during processing.
     """
+    # 1: Locate the operation calculation formulas form
     database_tree = await client.api.get_database_tree(database_id)
     form_id = next(
         (res.id for res in database_tree.resources if res.type == "FORM" and res.label.startswith("0.1.5_")),
         None
     )
+    if not form_id:
+        raise ValueError("Operation Calculation Formulas form not found in the database tree")
+
+    # 2: Fetch the rows specifying operation calculation formulas
     res = await client.api.get_operation_calculation_formulas_fields(form_id)
     logging.info(f"Retrieved {len(res)} operation calculation formula fields")
     internal_fields = [field for field in res if field.apply == OperationCalculationApplyType.INTERNAL]
-    internal_changeset = await get_internal_operation_calculation_changeset_entries(client, database_id,
-                                                                                    internal_fields)
-    logging.info(f"Computed {len(internal_changeset)} internal changeset entries")
-    for i, entry in enumerate(internal_changeset, start=1):
-        entry.calc_order = i
     external_fields = [field for field in res if field.apply == OperationCalculationApplyType.EXTERNAL]
-    external_changeset = await get_external_operation_calculation_changeset_entries(client, database_id, external_fields)
+
+    # 3: Generate internal changeset entries (to replace form schema formulas)
+    internal_changeset, internal_errors = await get_internal_operation_calculation_changeset_entries(client,
+                                                                                                     database_id,
+                                                                                                     internal_fields)
+    logging.info(f"Computed {len(internal_changeset)} internal changeset entries")
+    for i, entry in enumerate(internal_changeset, start=1): entry.calc_order = i
+
+    # 4: Generate external changeset entries (to update existing records)
+    external_changeset, external_errors = await get_external_operation_calculation_changeset_entries(client, database_id,
+                                                                                    external_fields)
     logging.info(f"Computed {len(external_changeset)} external changeset entries")
-    start_index = len(internal_changeset) + 1
-    for i, entry in enumerate(external_changeset, start=start_index):
-        entry.calc_order = i
-    form_changeset = FormChangeset(entries=internal_changeset, action="operation_calculation_formulas", title="Internal Changeset")
+    for i, entry in enumerate(external_changeset, start=len(internal_changeset) + 1): entry.calc_order = i
+
+    # 5: Construct the structured changesets and error report to return
+    form_changeset = FormChangeset(entries=internal_changeset, action="operation_calculation_formulas",
+                                   title="Internal Changeset")
     record_changeset = RecordChangeset(entries=external_changeset, action="operation_calculation_formulas",
                                        title="External Changeset")
-    return form_changeset, record_changeset
+    errors = internal_errors + external_errors
+    for i in range(len(errors)):
+        errors[i].form_id = form_id
+        errors[i].form_name = "0.1.5_Operation_Calculation_Formulas"
+    errors_report = FieldErrorReport(title="0.1.5 Operation Calculation Formulas Field Errors", entries=errors)
+
+    return form_changeset, record_changeset, errors_report
+
+
+def parse_expressions_with_errors(
+        form_id: str,
+        field: OperationCalculationFormulasField,
+        field_code: str,
+) -> Tuple[Optional[ActivityInfoExpression], Optional[ActivityInfoExpression], List[FieldErrorEntry]]:
+    """Tries to parse filter and formula expressions and returns any errors found.
+    Args:
+        form_id: The ID of the form.
+        field: The OperationCalculationFormulasField object.
+        field_code: The field code to report in errors.
+    Returns:
+        A tuple containing:
+            - The parsed filter ActivityInfoExpression (or None if failed).
+            - The parsed formula ActivityInfoExpression (or None if failed).
+            - A list of FieldErrorEntry objects representing any errors encountered.
+    """
+    errors: List[FieldErrorEntry] = []
+    filter_expr = None
+    formula_expr = None
+
+    try:
+        filter_expr = ActivityInfoExpression.parse(field.filter)
+    except Exception as e:
+        errors.append(FieldErrorEntry(
+            formId=form_id,
+            fieldId=field.id,
+            fieldCode=field_code,
+            expression=field.filter,
+            errorMessage=f"Failed to parse filter expression: {e}",
+        ))
+        logging.warning(f"Failed to parse filter expression for field {field.id} in form {form_id}: {e}")
+
+    try:
+        formula_expr = ActivityInfoExpression.parse(field.formula)
+    except Exception as e:
+        errors.append(FieldErrorEntry(
+            formId=form_id,
+            fieldId=field.id,
+            fieldCode=field_code,
+            expression=field.formula,
+            errorMessage=f"Failed to parse formula expression: {e}",
+        ))
+        logging.warning(f"Failed to parse formula expression for field {field.id} in form {form_id}: {e}")
+
+    return filter_expr, formula_expr, errors
 
 
 async def get_internal_operation_calculation_changeset_entries(client: ActivityInfoClient, database_id: str,
                                                                internal_fields: List[
-                                                                   OperationCalculationFormulasField]) -> List[
-    FormChangesetEntry]:
+                                                                   OperationCalculationFormulasField]) -> Tuple[List[
+    FormChangesetEntry], List[FieldErrorEntry]]:
     """Generates changeset entries for internal operation calculation formulas.
     Args:
         client: An instance of ActivityInfoClient to interact with the API.
         database_id: The ID of the database to process.
         internal_fields: A list of OperationCalculationFormulasField objects representing internal fields.
     Returns:
-        A list of FormChangesetEntry objects representing the changeset entries.
+        A tuple containing:
+            - A list of FormChangesetEntry objects representing the changeset entries.
+            - A list of FieldErrorEntry objects representing any errors encountered.
     """
+    errors: List[FieldErrorEntry] = []
     internal_fields.sort(key=lambda x: x.ref_order)
     grouped_fields: Dict[Tuple[str, str], List[OperationCalculationFormulasField]] = {}
+
     for field in internal_fields:
+        # 1: Resolve the actual form ID from the sys_prefix (i.e: 2.1A -> c41sw8jmkcry89xi)
         form_id = await resolve_form_id_from_prefix(client, database_id, field.sys_prefix)
         if not form_id:
+            errors.append(FieldErrorEntry(
+                formId="",
+                fieldId=field.id,
+                fieldCode="SYSPREFIX",
+                expression=field.sys_prefix,
+                errorMessage=f"Could not resolve form ID for prefix {field.sys_prefix}",
+            ))
             logging.warning(f"Could not resolve form ID for prefix {field.sys_prefix}")
             continue
         field_code = f"{field.sys_field}_ICALC"
+
+        # 2: Validate the filter and formula expressions by parsing them
+        _, _, parse_errors = parse_expressions_with_errors(form_id, field, field_code)
+        if parse_errors:
+            errors.extend(parse_errors)
+            continue
+
+        # 3: Group fields by (form_id, field_code) to combine multiple conditions later
         key = (form_id, field_code)
         if key not in grouped_fields:
             grouped_fields[key] = []
         grouped_fields[key].append(field)
-        logging.info(f"Resolved form ID {form_id} for sys_prefix {field.sys_prefix}")
+
+    # 4: For each group, combine the formulas using nested IF statements based on the filters
     changeset_plans: List[FormChangesetPlan] = []
     for (form_id, field_code), fields in grouped_fields.items():
         fields.sort(key=lambda x: x.ref_order)
@@ -88,57 +176,83 @@ async def get_internal_operation_calculation_changeset_entries(client: ActivityI
         last = reversed_fields[0]
         expr = f"IF({last.filter}, {last.formula})"
         for f in reversed_fields[1:]:
-             expr = f"IF({f.filter}, {f.formula}, {expr})"
+            expr = f"IF({f.filter}, {f.formula}, {expr})"
         changeset_plans.append(FormChangesetPlan(
             calcOrder=fields[-1].ref_order,
             formId=form_id,
             fieldCode=field_code,
             newExpression=expr,
         ))
-    return await resolve_internal_changeset_plans(client, database_id, changeset_plans)
+
+    return await resolve_internal_changeset_plans(client, changeset_plans), errors
 
 
 async def get_external_operation_calculation_changeset_entries(client: ActivityInfoClient, database_id: str,
                                                                external_fields: List[
-                                                                   OperationCalculationFormulasField]) -> List[
-    RecordChangesetEntry]:
+                                                                   OperationCalculationFormulasField]) -> Tuple[
+    List[RecordChangesetEntry], List[FieldErrorEntry]]:
     """Generates changeset entries for external operation calculation formulas.
     Args:
         client: An instance of ActivityInfoClient to interact with the API.
         database_id: The ID of the database to process.
         external_fields: A list of OperationCalculationFormulasField objects representing external fields.
     Returns:
-        A list of RecordChangesetEntry objects representing the changeset entries.
+        A tuple containing:
+            - A list of RecordChangesetEntry objects representing the changeset entries.
+            - A list of FieldErrorEntry objects representing any errors encountered.
     """
+    errors: List[FieldErrorEntry] = []
     external_fields.sort(key=lambda x: x.ref_order)
     skip_filter_count = 0
     skip_unchanged_count = 0
     changeset_entries: List[RecordChangesetEntry] = []
+
     for field in external_fields:
+        # 1: Resolve the actual form ID from the sys_prefix (i.e: 2.1A -> c41sw8jmkcry89xi)
         form_id = await resolve_form_id_from_prefix(client, database_id, field.sys_prefix)
-        logging.info(f"Resolved form ID {form_id} for sys_prefix {field.sys_prefix}")
+        if not form_id:
+            errors.append(FieldErrorEntry(
+                formId="",
+                fieldId=field.id,
+                fieldCode="SYSPREFIX",
+                expression=field.sys_prefix,
+                errorMessage=f"Could not resolve form ID for prefix {field.sys_prefix}",
+            ))
+            logging.warning(f"Could not resolve form ID for prefix {field.sys_prefix}")
+            continue
+
+        # 2: Fetch all records from the target form
         database_tree = await client.api.get_database_tree(database_id)
         form_name = next(
             (res.label for res in database_tree.resources if res.id == form_id),
             None
         )
         entries = await client.api.get_form(form_id)
-        filter_expr = ActivityInfoExpression.parse(field.filter)
-        formula_expr = ActivityInfoExpression.parse(field.formula)
+
+        filter_expr, formula_expr, parse_errors = parse_expressions_with_errors(form_id, field, field.sys_field)
+        if parse_errors:
+            errors.extend(parse_errors)
+            continue
+
+        # 3: Evaluate the filter and formula for each record, creating changeset entries as needed
         for entry in entries:
             old_fields = {k: entry[k] for k in entry if k not in ('_id', '_lastEditTime') and entry[k] is not None}
             nested_fields = build_nested_dict(old_fields)
-            resolver = DictResolver(nested_fields)
-            if not filter_expr.evaluate(resolver):
+
+            resolver = RecordResolver(client, nested_fields)
+            if not await filter_expr.evaluate(resolver):
                 skip_filter_count += 1
                 continue
+
             record_id = entry.get("@id")
             if not record_id:
                 continue
-            res = formula_expr.evaluate(resolver)
+
+            res = await formula_expr.evaluate(resolver)
             if old_fields.get(field.sys_field) == res:
                 skip_unchanged_count += 1
                 continue
+
             new_fields = old_fields.copy()
             new_fields[field.sys_field] = res
             changeset_entries.append(RecordChangesetEntry(
@@ -150,23 +264,11 @@ async def get_external_operation_calculation_changeset_entries(client: ActivityI
                 fields=new_fields,
                 oldFields=old_fields,
             ))
+
     logging.info(f"Skipped {skip_filter_count} records due to filter not matching")
     logging.info(f"Skipped {skip_unchanged_count} records due to unchanged values")
-    return changeset_entries
 
-
-def build_nested_dict(flat: Dict[str, Any]) -> Dict:
-    """Converts a flat dictionary with dot-separated keys into a nested dictionary."""
-    nested: Dict = {}
-    for key, value in flat.items():
-        parts = key.split(".")
-        d = nested
-        for part in parts[:-1]:
-            if part not in d:
-                d[part] = {}
-            d = d[part]
-        d[parts[-1]] = value
-    return nested
+    return changeset_entries, errors
 
 
 async def resolve_form_id_from_prefix(client: ActivityInfoClient, database_id: str, sys_prefix: str) -> Optional[str]:
@@ -178,21 +280,24 @@ async def resolve_form_id_from_prefix(client: ActivityInfoClient, database_id: s
     return None
 
 
-async def resolve_internal_changeset_plans(client: ActivityInfoClient, database_id: str,
+async def resolve_internal_changeset_plans(client: ActivityInfoClient,
                                            internal_changeset: List[FormChangesetPlan]) -> List[FormChangesetEntry]:
     """Resolves the internal changeset plans into actual changeset entries by fetching current formulas.
     Args:
         client: An instance of ActivityInfoClient to interact with the API.
-        database_id: The ID of the database to process.
         internal_changeset: A list of FormChangesetPlan objects representing the planned changes.
     Returns:
         A list of FormChangesetEntry objects representing the resolved changeset entries.
     """
     changeset_entries: List[FormChangesetEntry] = []
     for plan in internal_changeset:
+        # 1: Collect field ID to code mappings for the target form and its references
         field_lookup = await collect_field_mappings(client, plan.form_id)
+        # 2: Fetch the current form schema to get existing formulas
         schema = await client.api.get_form_schema(plan.form_id)
         code_lookup = {el.code: el.id for el in schema.elements}
+
+        # 3: Replace field IDs in the old expression with field codes for comparison
         target_element = next((el for el in schema.elements if el.code == plan.field_code), None)
         if not target_element:
             logging.warning(f"Field code {plan.field_code} not found in form {plan.form_id}")
@@ -204,6 +309,7 @@ async def resolve_internal_changeset_plans(client: ActivityInfoClient, database_
         if old_expression == plan.new_expression:
             logging.info(f"Skipping unchanged formula for {plan.field_code} in form {plan.form_id}")
             continue
+
         changeset_entries.append(FormChangesetEntry(
             calcOrder=plan.calc_order,
             formId=plan.form_id,
@@ -213,6 +319,7 @@ async def resolve_internal_changeset_plans(client: ActivityInfoClient, database_
             newExpression=plan.new_expression,
             oldExpression=old_expression,
         ))
+
     return changeset_entries
 
 
@@ -234,11 +341,13 @@ async def collect_field_mappings(client: ActivityInfoClient, start_form_id: str)
         if form_id in visited_forms:
             continue
         visited_forms.add(form_id)
+
         try:
             schema = await client.api.get_form_schema(form_id)
         except Exception as e:
             logging.warning(f"Failed to fetch schema for form {form_id}: {e}")
             continue
+
         for el in schema.elements:
             if el.code:
                 mappings[el.id] = el.code
@@ -252,4 +361,5 @@ async def collect_field_mappings(client: ActivityInfoClient, start_form_id: str)
                             pending_forms.append(ref_form_id)
 
     logging.info(f"Collected {len(mappings)} field mappings across {len(visited_forms)} forms")
+
     return mappings

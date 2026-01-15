@@ -8,7 +8,12 @@ _parser = Lark(GRAMMAR, parser="lalr")
 class _Transformer(Transformer):
     """Transforms the parse tree into an AST."""
     def dotted_name(self, items):
-        return Identifier([str(i) for i in items])
+        items = [i for i in items if i is not None]
+        originating = False
+        if items and str(items[0]) == "@":
+            originating = True
+            items = items[1:]
+        return Identifier([str(i) for i in items], originating=originating)
 
     def NUMBER(self, n):
         return Number(float(n))

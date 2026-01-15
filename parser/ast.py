@@ -6,26 +6,28 @@ import re
 
 
 class IdentifierResolver(Protocol):
-    def resolve(self, identifier: "Identifier") -> Any: ...
+    async def resolve(self, identifier: "Identifier") -> Any: ...
+    async def lookup(self, form_id: str, criteria: "Expr", expression: "Expr") -> Any: ...
+    async def aggregate(self, function: str, form_id: str, criteria: "Expr", expression: "Expr") -> Any: ...
 
 # ---------- Expression Evaluation ----------
 
-def evaluate_expr(expr: Expr, resolver: IdentifierResolver) -> Any:
+async def evaluate_expr(expr: Expr, resolver: IdentifierResolver) -> Any:
     """Evaluates an expression using the provided identifier resolver."""
     if isinstance(expr, Identifier):
-        return resolver.resolve(expr)
+        return await resolver.resolve(expr)
     if isinstance(expr, Number):
         return expr.value
     if isinstance(expr, String):
         return expr.value
     if isinstance(expr, BinaryOp):
-        return expr.evaluate(resolver)
+        return await expr.evaluate(resolver)
     if isinstance(expr, Comparison):
-        return expr.evaluate(resolver)
+        return await expr.evaluate(resolver)
     if isinstance(expr, UnaryOp):
-        return expr.evaluate(resolver)
+        return await expr.evaluate(resolver)
     if isinstance(expr, FunctionCall):
-        return expr.evaluate(resolver)
+        return await expr.evaluate(resolver)
     raise TypeError(expr)
 
 
@@ -44,9 +46,11 @@ class ExprNode:
 class Identifier(ExprNode):
     """Represents an identifier, possibly dotted (e.g., user.name)."""
     parts: List[str]
+    originating: bool = False
 
     def __str__(self) -> str:
-        return ".".join(self.parts)
+        prefix = "@" if self.originating else ""
+        return prefix + ".".join(self.parts)
 
     def identifiers(self) -> Set[str]:
         return {str(self)}
@@ -77,16 +81,16 @@ class BinaryOp(ExprNode):
     op: str
     right: "Expr"
 
-    def evaluate(self, resolver: IdentifierResolver) -> Any:
-        l = evaluate_expr(self.left, resolver)
+    async def evaluate(self, resolver: IdentifierResolver) -> Any:
+        l = await evaluate_expr(self.left, resolver)
         
         # Short-circuit logic
         if self.op == "&&":
-            return bool(l) and bool(evaluate_expr(self.right, resolver))
+            return bool(l) and bool(await evaluate_expr(self.right, resolver))
         if self.op == "||":
-            return bool(l) or bool(evaluate_expr(self.right, resolver))
+            return bool(l) or bool(await evaluate_expr(self.right, resolver))
 
-        r = evaluate_expr(self.right, resolver)
+        r = await evaluate_expr(self.right, resolver)
 
         if self.op == "+":
             return l + r
@@ -111,8 +115,8 @@ class UnaryOp(ExprNode):
     op: str
     operand: "Expr"
 
-    def evaluate(self, resolver: IdentifierResolver) -> Any:
-        val = evaluate_expr(self.operand, resolver)
+    async def evaluate(self, resolver: IdentifierResolver) -> Any:
+        val = await evaluate_expr(self.operand, resolver)
         if self.op == "!":
             return not val
         raise ValueError(f"Unknown unary operator: {self.op}")
@@ -132,9 +136,9 @@ class Comparison(ExprNode):
     op: str
     right: "Expr"
 
-    def evaluate(self, resolver: IdentifierResolver) -> bool:
-        l = evaluate_expr(self.left, resolver)
-        r = evaluate_expr(self.right, resolver)
+    async def evaluate(self, resolver: IdentifierResolver) -> bool:
+        l = await evaluate_expr(self.left, resolver)
+        r = await evaluate_expr(self.right, resolver)
 
         if self.op == "==": return l == r
         if self.op == "!=": return l != r
@@ -160,36 +164,49 @@ class FunctionCall(ExprNode):
     name: str
     args: List["Expr"]
 
-    def evaluate(self, resolver: IdentifierResolver) -> Any:
+    async def evaluate(self, resolver: IdentifierResolver) -> Any:
         func_name = self.name.upper()
         
         if func_name == "IF":
             if len(self.args) not in (2, 3):
                 raise ValueError("IF expects 2 or 3 arguments")
-            condition = evaluate_expr(self.args[0], resolver)
+            condition = await evaluate_expr(self.args[0], resolver)
             if condition:
-                return evaluate_expr(self.args[1], resolver)
+                return await evaluate_expr(self.args[1], resolver)
             elif len(self.args) == 3:
-                return evaluate_expr(self.args[2], resolver)
+                return await evaluate_expr(self.args[2], resolver)
             return None 
+
+        if func_name == "LOOKUP":
+            if len(self.args) != 3:
+                raise ValueError("LOOKUP expects 3 arguments")
+            form_id = await evaluate_expr(self.args[0], resolver)
+            return await resolver.lookup(form_id, self.args[1], self.args[2])
+
+        if func_name == "AGGREGATE":
+            if len(self.args) != 4:
+                raise ValueError("AGGREGATE expects 4 arguments")
+            func = await evaluate_expr(self.args[0], resolver)
+            form_id = await evaluate_expr(self.args[1], resolver)
+            return await resolver.aggregate(func, form_id, self.args[2], self.args[3])
 
         if func_name == "ISNUMBER":
             if len(self.args) != 1:
                 raise ValueError("ISNUMBER expects 1 argument")
-            val = evaluate_expr(self.args[0], resolver)
+            val = await evaluate_expr(self.args[0], resolver)
             return isinstance(val, (int, float)) and not isinstance(val, bool)
 
         if func_name == "ISBLANK":
             if len(self.args) != 1:
                 raise ValueError("ISBLANK expects 1 argument")
-            val = evaluate_expr(self.args[0], resolver)
+            val = await evaluate_expr(self.args[0], resolver)
             return val is None or val == ""
             
         if func_name == "COALESCE":
             if not self.args:
                 raise ValueError("COALESCE expects at least 1 argument")
             for arg in self.args:
-                val = evaluate_expr(arg, resolver)
+                val = await evaluate_expr(arg, resolver)
                 if val is not None and val != "":
                     return val
             return None
@@ -197,32 +214,34 @@ class FunctionCall(ExprNode):
         if func_name == "POWER":
             if len(self.args) != 2:
                 raise ValueError("POWER expects 2 arguments")
-            base = evaluate_expr(self.args[0], resolver)
-            exp = evaluate_expr(self.args[1], resolver)
+            base = await evaluate_expr(self.args[0], resolver)
+            exp = await evaluate_expr(self.args[1], resolver)
             return math.pow(base, exp)
 
         if func_name == "CEIL":
             if len(self.args) != 1:
                 raise ValueError("CEIL expects 1 argument")
-            val = evaluate_expr(self.args[0], resolver)
+            val = await evaluate_expr(self.args[0], resolver)
             return math.ceil(val)
 
         if func_name == "FLOOR":
             if len(self.args) != 1:
                 raise ValueError("FLOOR expects 1 argument")
-            val = evaluate_expr(self.args[0], resolver)
+            val = await evaluate_expr(self.args[0], resolver)
             return math.floor(val)
         
         if func_name == "ROUND":
             if len(self.args) not in (1, 2):
                 raise ValueError("ROUND expects 1 or 2 arguments")
-            val = evaluate_expr(self.args[0], resolver)
+            val = await evaluate_expr(self.args[0], resolver)
             digits = 0
             if len(self.args) == 2:
-                digits = int(evaluate_expr(self.args[1], resolver))
+                digits = int(await evaluate_expr(self.args[1], resolver))
             return round(val, digits)
 
-        evaluated_args = [evaluate_expr(arg, resolver) for arg in self.args]
+        evaluated_args = []
+        for arg in self.args:
+            evaluated_args.append(await evaluate_expr(arg, resolver))
         
         if func_name == "SUM":
             return sum(arg for arg in evaluated_args if isinstance(arg, (int, float)))

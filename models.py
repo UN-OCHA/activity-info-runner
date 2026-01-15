@@ -21,20 +21,39 @@ class FormChangesetEntry(FormChangesetPlan):
     field_id: str = Field(alias='fieldId')
 
 
-class FormChangeset(BaseModel):
-    """A set of changes made to form fields' calculation expressions."""
-    entries: list[FormChangesetEntry] = Field(alias='entries')
+class BaseChangeset(BaseModel):
     action: str = Field(alias='action')
     title: str = Field(default="", alias='title')
 
     def pretty_print_table(self):
         console = Console()
-        console.rule(f"[bold blue]{self.action}[/bold blue]")  # Header
+        console.rule(f"[bold blue]{self.action}[/bold blue]")
+        table = self.create_table()
+        for row in self.get_table_rows():
+            table.add_row(*row)
+        console.print(table)
+
+    def create_table(self) -> Table:
+        raise NotImplementedError
+
+    def get_table_rows(self) -> list[list[Any]]:
+        raise NotImplementedError
+
+
+class FormChangeset(BaseChangeset):
+    """A set of changes made to form fields' calculation expressions."""
+    entries: list[FormChangesetEntry] = Field(alias='entries')
+
+    def create_table(self) -> Table:
         table = Table(show_header=True, header_style="bold magenta", title=self.title)
         table.add_column("Order", style="white", no_wrap=True, justify="center")
         table.add_column("Form", style="cyan", no_wrap=True)
         table.add_column("Field", style="yellow")
         table.add_column("Expression", style="white")
+        return table
+
+    def get_table_rows(self) -> list[list[Any]]:
+        rows = []
         for entry in self.entries:
             expr = Text()
             expr.append(entry.old_expression, style="red")
@@ -46,8 +65,8 @@ class FormChangeset(BaseModel):
             form = Text()
             form.append(entry.form_name)
             form.append(f"\n({entry.form_id})", style="dim")
-            table.add_row(str(entry.calc_order), form, field, expr)
-        console.print(table)
+            rows.append([str(entry.calc_order), form, field, expr])
+        return rows
 
 
 class RecordChangesetEntry(BaseModel):
@@ -74,15 +93,11 @@ class RecordChangesetEntry(BaseModel):
         console.print(table)
 
 
-class RecordChangeset(BaseModel):
+class RecordChangeset(BaseChangeset):
     """A set of changes made to records' fields."""
     entries: list[RecordChangesetEntry] = Field(alias='entries')
-    action: str = Field(alias='action')
-    title: str = Field(default="", alias='title')
 
-    def pretty_print_table(self):
-        console = Console()
-        console.rule(f"[bold blue]{self.action}[/bold blue]")
+    def create_table(self) -> Table:
         table = Table(
             show_header=True,
             header_style="bold magenta",
@@ -91,8 +106,12 @@ class RecordChangeset(BaseModel):
         )
         table.add_column("Order", style="green", justify="center", no_wrap=True)
         table.add_column("Form", style="cyan", no_wrap=True)
-        table.add_column("Record", style="yellow", no_wrap=True)
+        table.add_column("Record", style="dark_orange", no_wrap=True)
         table.add_column("Changes", style="white")
+        return table
+
+    def get_table_rows(self) -> list[list[Any]]:
+        rows = []
         for entry in self.entries:
             changes = Text()
             for field, new_value in entry.fields.items():
@@ -107,10 +126,44 @@ class RecordChangeset(BaseModel):
             form = Text()
             form.append(entry.form_name)
             form.append(f" ({entry.form_id})", style="dim")
-            table.add_row(
+            rows.append([
                 str(entry.calc_order),
                 form,
                 entry.record_id,
                 changes,
-            )
-        console.print(table)
+            ])
+        return rows
+
+class FieldErrorEntry(BaseModel):
+    """An error found in a form field's calculation expression."""
+    form_id: str = Field(alias='formId')
+    form_name: str = Field(default=None, alias='formName')
+    field_code: str = Field(alias='fieldCode')
+    field_id: str = Field(alias='fieldId')
+    expression: str = Field(alias='expression')
+    error_message: str = Field(alias='errorMessage')
+
+class FieldErrorReport(BaseChangeset):
+    """A report of errors found in form fields' calculation expressions."""
+    entries: list[FieldErrorEntry] = Field(alias='entries')
+    action: str = Field(default="Field Error Report", alias='action')
+
+    def create_table(self) -> Table:
+        table = Table(show_header=True, header_style="bold magenta", title=self.title)
+        table.add_column("Form", style="cyan", no_wrap=True)
+        table.add_column("Field", style="yellow")
+        table.add_column("Expression", style="white")
+        table.add_column("Error Message", style="red")
+        return table
+
+    def get_table_rows(self) -> list[list[Any]]:
+        rows = []
+        for entry in self.entries:
+            field = Text()
+            field.append(entry.field_code)
+            field.append(f"\n({entry.field_id})", style="dim")
+            form = Text()
+            form.append(entry.form_name)
+            form.append(f"\n({entry.form_id})", style="dim")
+            rows.append([form, field, entry.expression, entry.error_message])
+        return rows

@@ -139,3 +139,15 @@ The tool supports a custom expression language similar to Excel formulas.
 - `REGEXMATCH(text, pattern)`
 - `REGEXEXTRACT(text, pattern)`
 - `REGEXREPLACE(text, pattern, replacement)`
+
+#### Advanced & Cross-Form
+- `LOOKUP(form_id, criteria, expression)` - Finds the first record in `form_id` matching `criteria` and evaluates `expression` against it.
+- `AGGREGATE(function, form_id, criteria, expression)` - Aggregates `expression` values from all records in `form_id` matching `criteria`. Supported functions: `SUM`, `COUNT`, `AVERAGE`, `MIN`, `MAX`.
+
+### Originating Record Reference
+
+When using cross-form functions like `LOOKUP` or `AGGREGATE`, you can use the `@` prefix to refer to fields in the record currently being processed (the "originating" record).
+
+Example:
+`LOOKUP("target_form_id", category == @category, price)`
+*This looks up the price in "target_form_id" where the category matches the current record's category.*

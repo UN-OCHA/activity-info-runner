@@ -29,8 +29,9 @@ GRAMMAR = r"""
 
 function_call: NAME "(" [expr ("," expr)*] ")"
 
-dotted_name: NAME ("." NAME)*
+dotted_name: [ORIGINATING] NAME ("." NAME)*
 
+ORIGINATING: "@"
 COMP_OP: "==" | "!=" | "<=" | ">=" | "<" | ">"
 
 %import common.CNAME -> NAME
