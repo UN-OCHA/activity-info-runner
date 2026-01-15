@@ -69,6 +69,14 @@ class ActivityInfoHTTPClient:
                     raise APIError(
                         f"{response.status_code}: {response.text}"
                     )
+
+                if not response.content:
+                    return None
+
+                content_type = response.headers.get("content-type", "")
+                if "application/json" not in content_type.lower():
+                    return None
+
                 return response.json()
 
             except httpx.TimeoutException as exc:

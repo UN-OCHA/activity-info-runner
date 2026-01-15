@@ -101,7 +101,8 @@ def parse_expressions_with_errors(
     except Exception as e:
         errors.append(FieldErrorEntry(
             formId=form_id,
-            fieldId=field.id,
+            recordId=field.id,
+            parentRecordId=None,
             fieldCode=field_code,
             expression=field.filter,
             errorMessage=f"Failed to parse filter expression: {e}",
@@ -113,7 +114,8 @@ def parse_expressions_with_errors(
     except Exception as e:
         errors.append(FieldErrorEntry(
             formId=form_id,
-            fieldId=field.id,
+            recordId=field.id,
+            parentRecordId=None,
             fieldCode=field_code,
             expression=field.formula,
             errorMessage=f"Failed to parse formula expression: {e}",
@@ -147,7 +149,8 @@ async def get_internal_operation_calculation_changeset_entries(client: ActivityI
         if not form_id:
             errors.append(FieldErrorEntry(
                 formId="",
-                fieldId=field.id,
+                recordId=field.id,
+                parentRecordId=None,
                 fieldCode="SYSPREFIX",
                 expression=field.sys_prefix,
                 errorMessage=f"Could not resolve form ID for prefix {field.sys_prefix}",
@@ -213,7 +216,8 @@ async def get_external_operation_calculation_changeset_entries(client: ActivityI
         if not form_id:
             errors.append(FieldErrorEntry(
                 formId="",
-                fieldId=field.id,
+                recordId=field.id,
+                parentRecordId=None,
                 fieldCode="SYSPREFIX",
                 expression=field.sys_prefix,
                 errorMessage=f"Could not resolve form ID for prefix {field.sys_prefix}",

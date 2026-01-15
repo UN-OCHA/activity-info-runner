@@ -22,6 +22,11 @@ async def main(dry_run: bool, database_id: str):
         record_changeset.pretty_print_table()
         errors_report.pretty_print_table()
 
+        if not dry_run:
+            error_dtos = [e.as_form_update_dto() for e in errors_report.entries]
+            await client.api.update_form_records(error_dtos)
+            logging.info("Updated operation calculation error records in Activity Info.")
+
 
 if __name__ == '__main__':
     # Usage: python main.py [--debug] [--dry-run] <database_id>

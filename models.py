@@ -45,7 +45,7 @@ class FormChangeset(BaseChangeset):
     entries: list[FormChangesetEntry] = Field(alias='entries')
 
     def create_table(self) -> Table:
-        table = Table(show_header=True, header_style="bold magenta", title=self.title)
+        table = Table(show_header=True, header_style="bold", title=self.title)
         table.add_column("Order", style="white", no_wrap=True, justify="center")
         table.add_column("Form", style="cyan", no_wrap=True)
         table.add_column("Field", style="yellow")
@@ -82,7 +82,7 @@ class RecordChangesetEntry(BaseModel):
     def pretty_print_delta(self):
         console = Console()
         console.rule(f"[bold blue]Record ID: {self.record_id}[/bold blue]")  # Header
-        table = Table(show_header=True, header_style="bold magenta")
+        table = Table(show_header=True, header_style="bold")
         table.add_column("Field Code", style="cyan", no_wrap=True)
         table.add_column("Old Value", style="red")
         table.add_column("New Value", style="green")
@@ -100,11 +100,11 @@ class RecordChangeset(BaseChangeset):
     def create_table(self) -> Table:
         table = Table(
             show_header=True,
-            header_style="bold magenta",
+            header_style="bold",
             title=self.title,
             expand=True,
         )
-        table.add_column("Order", style="green", justify="center", no_wrap=True)
+        table.add_column("Order", style="white", justify="center", no_wrap=True)
         table.add_column("Form", style="cyan", no_wrap=True)
         table.add_column("Record", style="dark_orange", no_wrap=True)
         table.add_column("Changes", style="white")
@@ -134,14 +134,37 @@ class RecordChangeset(BaseChangeset):
             ])
         return rows
 
+class FormRecordUpdateDTO(BaseModel):
+    form_id: str = Field(alias='formId')
+    record_id: str = Field(alias='recordId')
+    parent_record_id: Optional[str] = Field(alias='parentRecordId')
+    deleted: bool = Field(default=False, alias='deleted')
+    fields: Dict[str, Any] = Field(alias='fields')
+
+    model_config = {
+        "populate_by_name": True,
+    }
+
 class FieldErrorEntry(BaseModel):
     """An error found in a form field's calculation expression."""
     form_id: str = Field(alias='formId')
     form_name: str = Field(default=None, alias='formName')
+    record_id: str = Field(alias='recordId')
+    parent_record_id: Optional[str] = Field(alias='parentRecordId')
     field_code: str = Field(alias='fieldCode')
-    field_id: str = Field(alias='fieldId')
     expression: str = Field(alias='expression')
     error_message: str = Field(alias='errorMessage')
+
+    def as_form_update_dto(self) -> FormRecordUpdateDTO:
+        return FormRecordUpdateDTO(
+            formId=self.form_id,
+            recordId=self.record_id,
+            parentRecordId=self.parent_record_id,
+            deleted=False,
+            fields={
+                "ERRS": self.error_message
+            },
+        )
 
 class FieldErrorReport(BaseChangeset):
     """A report of errors found in form fields' calculation expressions."""
@@ -149,8 +172,9 @@ class FieldErrorReport(BaseChangeset):
     action: str = Field(default="Field Error Report", alias='action')
 
     def create_table(self) -> Table:
-        table = Table(show_header=True, header_style="bold magenta", title=self.title)
+        table = Table(show_header=True, header_style="bold", title=self.title)
         table.add_column("Form", style="cyan", no_wrap=True)
+        table.add_column("Record", style="dark_orange", no_wrap=True)
         table.add_column("Field", style="yellow")
         table.add_column("Expression", style="white")
         table.add_column("Error Message", style="red")
@@ -159,11 +183,8 @@ class FieldErrorReport(BaseChangeset):
     def get_table_rows(self) -> list[list[Any]]:
         rows = []
         for entry in self.entries:
-            field = Text()
-            field.append(entry.field_code)
-            field.append(f"\n({entry.field_id})", style="dim")
             form = Text()
             form.append(entry.form_name)
             form.append(f"\n({entry.form_id})", style="dim")
-            rows.append([form, field, entry.expression, entry.error_message])
+            rows.append([form, entry.record_id, entry.field_code, entry.expression, entry.error_message])
         return rows

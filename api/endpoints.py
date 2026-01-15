@@ -5,6 +5,7 @@ from api.client import ActivityInfoHTTPClient, APIError
 from typing import Any, List
 
 from api.models import OperationCalculationFormulasField, DatabaseTree, FormSchema
+from models import FormRecordUpdateDTO
 
 RawFormPayload = dict[str, Any]
 
@@ -49,3 +50,21 @@ class ActivityInfoEndpoints:
             raise APIError(
                 "Form does not match CostIndicator schema"
             ) from e
+
+    async def update_form_records(self, records: List[FormRecordUpdateDTO]) -> None:
+        payload = {
+            "changes": [
+                r.model_dump(
+                    mode="json",
+                    exclude_none=True,
+                    exclude_unset=True,
+                    by_alias=True,
+                )
+                for r in records
+            ]
+        }
+        await self._http.request(
+            "POST",
+            "/update",
+            json=payload,
+        )
