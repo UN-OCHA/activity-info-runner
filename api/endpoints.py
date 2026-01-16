@@ -1,13 +1,14 @@
-from pydantic import ValidationError
-
-from api.cache import auto_cache
-from api.client import ActivityInfoHTTPClient, APIError
 from typing import Any, List
 
-from api.models import OperationCalculationFormulasField, DatabaseTree, FormSchema
-from models import FormRecordUpdateDTO
+from pydantic import ValidationError
+
+from actions.dtos import RecordUpdateDTO
+from api.cache import auto_cache
+from api.client import ActivityInfoHTTPClient, APIError
+from api.models import OperationCalculationFormulasField, DatabaseTree, FormSchema, OperationMetricConfigurationField
 
 RawFormPayload = dict[str, Any]
+
 
 class ActivityInfoEndpoints:
     def __init__(self, http: ActivityInfoHTTPClient):
@@ -48,10 +49,26 @@ class ActivityInfoEndpoints:
             ]
         except ValidationError as e:
             raise APIError(
-                "Form does not match CostIndicator schema"
+                "Form does not match OperationCalculationFormulasField schema"
             ) from e
 
-    async def update_form_records(self, records: List[FormRecordUpdateDTO]) -> None:
+    async def get_operation_metric_configuration_fields(
+            self,
+            form_id: str,
+    ) -> List[OperationMetricConfigurationField]:
+        raw = await self.get_form(form_id, _bypass_cache=True)
+        try:
+            return [
+                OperationMetricConfigurationField.model_validate(item)
+                if isinstance(item, dict) else item
+                for item in raw
+            ]
+        except ValidationError as e:
+            raise APIError(
+                "Form does not match OperationMetricConfigurationField schema"
+            ) from e
+
+    async def update_form_records(self, records: List[RecordUpdateDTO]) -> None:
         payload = {
             "changes": [
                 r.model_dump(

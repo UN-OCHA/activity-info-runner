@@ -5,9 +5,11 @@ import os
 
 from dotenv import load_dotenv
 
-from actions import get_operation_calculation_changesets
+from actions.calculation_formulas import get_operation_calculation_changesets
+from actions.metric_configuration import get_operation_metric_configuration_changesets
 from api import ActivityInfoClient
 from api.client import BASE_URL
+from debug import pretty_print_changeset
 
 
 async def main(dry_run: bool, database_id: str):
@@ -17,11 +19,14 @@ async def main(dry_run: bool, database_id: str):
         raise ValueError("API_TOKEN environment variable is not set")
 
     async with ActivityInfoClient(BASE_URL, api_token=os.getenv("API_TOKEN")) as client:
-        form_changeset, record_changeset, error_dtos = await get_operation_calculation_changesets(client, database_id)
-
-        if not dry_run:
-            await client.api.update_form_records(error_dtos)
-            logging.info("Updated operation calculation error records in Activity Info.")
+        calculations_changeset = await get_operation_calculation_changesets(client, database_id)
+        metric_changeset = await get_operation_metric_configuration_changesets(client, database_id, order_start_idx=len(
+            calculations_changeset) + 1)
+        pretty_print_changeset(calculations_changeset + metric_changeset)
+        # if not dry_run and len(error_dtos) > 0:
+        #     await client.api.update_form_records(error_dtos)
+        #     logging.info("Updated operation calculation error records in Activity Info.")
+        # await get_operation_metric_configuration_changesets(client, database_id)
 
 
 if __name__ == '__main__':
