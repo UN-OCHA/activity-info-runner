@@ -6,6 +6,7 @@ A CLI tool for processing ActivityInfo internal logframe configurations. This to
 
 -   **Internal Calculations:** Updates form schema formulas based on configuration.
 -   **External Calculations:** Fetches records, evaluates formulas locally, and generates updates for records.
+-   **Metric Configuration Management:** Automates the lifecycle of metric fields across forms. Based on a central configuration, it creates and maintains a standard set of fields (Manual, Internal Calc, External Calc, Final) for each metric, ensuring consistent formulas and structure.
 -   **Dry Run Mode:** Preview changes without applying them.
 -   **Expression Parsing:** Custom parser for ActivityInfo-style expressions.
 
@@ -84,10 +85,12 @@ uv run pytest --cov=.
 ## Project Structure
 
 -   `main.py`: CLI entry point.
--   `actions.py`: Core logic for calculating changesets.
+-   `actions/`: Core logic packages.
+    -   `calculation_formulas.py`: Logic for calculation formulas.
+    -   `metric_configuration.py`: Logic for metric field configuration.
 -   `api/`: ActivityInfo API client and models.
 -   `parser/`: Expression parser and evaluator using `lark`.
--   `models.py`: Data models for changesets.
+-   `debug.py`: Utilities for pretty-printing changesets.
 
 ## Language Syntax
 

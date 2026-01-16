@@ -10,7 +10,8 @@ def test_operation_calculation_formulas_field_alias():
         "SYSPREFIX": "ABC",
         "SYSFIELD": "field_code",
         "FILTER": "true",
-        "FORMULA": "1+1"
+        "FORMULA": "1+1",
+        "ERRS": None
     }
     field = OperationCalculationFormulasField.model_validate(raw)
     assert field.id == "field1"

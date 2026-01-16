@@ -101,7 +101,8 @@ async def test_get_operation_calculation_formulas_fields(endpoints, mock_http_cl
             "SYSPREFIX": "P",
             "SYSFIELD": "F",
             "FILTER": "true",
-            "FORMULA": "1"
+            "FORMULA": "1",
+            "ERRS": None
         }
     ]
     # We need to mock what get_form returns.
@@ -123,5 +124,5 @@ async def test_get_operation_calculation_formulas_fields(endpoints, mock_http_cl
 async def test_get_operation_calculation_formulas_fields_error(endpoints, mock_http_client, mock_cache):
     mock_http_client.request.return_value = [{"invalid": "data"}]
     
-    with pytest.raises(APIError, match="Form does not match CostIndicator schema"):
+    with pytest.raises(APIError, match="Form does not match OperationCalculationFormulasField schema"):
         await endpoints.get_operation_calculation_formulas_fields("form1")

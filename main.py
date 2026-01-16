@@ -26,7 +26,6 @@ async def main(dry_run: bool, database_id: str):
         # if not dry_run and len(error_dtos) > 0:
         #     await client.api.update_form_records(error_dtos)
         #     logging.info("Updated operation calculation error records in Activity Info.")
-        # await get_operation_metric_configuration_changesets(client, database_id)
 
 
 if __name__ == '__main__':

@@ -162,15 +162,13 @@ async def get_operation_metric_configuration_changesets(client: ActivityInfoClie
                 )
 
                 existing = existing_fields_by_code.get(field_code)
-
                 if existing is None:
-                    # CREATE
                     field_actions.append(FieldCreateAction(
                         origin=origin,
                         order=config.order,
                         database_id=database_id,
                         form_id=form.id,
-                        form_name=form.name,
+                        form_name=form.label,
                         field_code=field_code,
                         label=label,
                         relevance_condition="TODO!!",
@@ -183,7 +181,6 @@ async def get_operation_metric_configuration_changesets(client: ActivityInfoClie
                         formula=formula,
                     ))
                 else:
-                    # UPDATE if needed
                     needs_update = (
                             existing.typeParameters.formula != formula
                         # TODO: also check for relevance condition or validation condition
@@ -224,5 +221,5 @@ async def get_operation_metric_configuration_changesets(client: ActivityInfoClie
         record_actions[idx].order = order_start_idx + idx
     for idx in range(len(field_actions)):
         field_actions[idx].order = order_start_idx + len(record_actions) + idx
-        
+
     return Changeset.from_tuple((record_actions, field_actions))
