@@ -1,7 +1,7 @@
 from enum import StrEnum
 from typing import Optional, Dict, Any, List
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class FieldType(StrEnum):
@@ -35,28 +35,73 @@ class FieldTypeParametersItemsUpdateDTO(BaseModel):
 
 
 class FieldTypeParametersUpdateDTO(BaseModel):
-    units: Optional[str] = Field(alias="units")
-    input_mask: Optional[str] = Field(alias="inputMask")
-    cardinality: Optional[FieldTypeParametersCardinality] = Field(alias="cardinality")
-    range: Optional[str] = Field(alias="range")
-    form_id: Optional[str] = Field(alias="formId")
-    items: Optional[List[FieldTypeParametersItemsUpdateDTO]] = Field(alias="items")
-    formula: Optional[str] = Field(alias="formula")
-    prefix_formula: Optional[str] = Field(alias="prefixFormula")
+    model_config = {"populate_by_name": True}
+    units: Optional[str] = Field(default=None, alias="units")
+    input_mask: Optional[str] = Field(default=None, alias="inputMask")
+    cardinality: Optional[FieldTypeParametersCardinality] = Field(default=None, alias="cardinality")
+    range: Optional[List[Dict[str, str]]] = Field(default=None, alias="range")
+    form_id: Optional[str] = Field(default=None, alias="formId")
+    items: Optional[List[FieldTypeParametersItemsUpdateDTO]] = Field(default=None, alias="items")
+    formula: Optional[str] = Field(default=None, alias="formula")
+    prefix_formula: Optional[str] = Field(default=None, alias="prefixFormula")
+
+    @field_validator("cardinality", mode="before")
+    @classmethod
+    def normalize_cardinality(cls, v):
+        if isinstance(v, str):
+            return v.upper()
+        return v
+
+    @field_validator("units", mode="before")
+    @classmethod
+    def normalize_empty_strings(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
 
 class SchemaFieldUpdateDTO(BaseModel):
-    id: str = Field(alias="id")
-    code: str = Field(alias="code")
+    model_config = {"populate_by_name": True}
+    id: Optional[str] = Field(default=None, alias="id")
+    code: Optional[str] = Field(default=None, alias="code")
     label: str = Field(alias="label")
-    relevance_condition: Optional[str] = Field(alias="relevanceCondition")
-    validation_condition: Optional[str] = Field(alias="validationCondition")
-    data_entry_visible: bool = Field(alias="dataEntryVisible")
-    table_visible: bool = Field(alias="tableVisible")
+    relevance_condition: Optional[str] = Field(default=None, alias="relevanceCondition")
+    validation_condition: Optional[str] = Field(default=None, alias="validationCondition")
+    data_entry_visible: bool = Field(default=False, alias="dataEntryVisible")
+    table_visible: bool = Field(default=False, alias="tableVisible")
     required: bool = Field(alias="required")
-    key: bool = Field(alias="key")
-    type: FieldType = Field(alias="type")
-    type_parameters: Optional[FieldTypeParametersUpdateDTO] = Field(alias="typeParameters")
+    key: Optional[bool] = Field(default=False, alias="key")
+    type: str = Field(alias="type")
+    type_parameters: Optional[FieldTypeParametersUpdateDTO] = Field(default=None, alias="typeParameters")
+
+    @field_validator("type", mode="before")
+    @classmethod
+    def normalize_type_case(cls, v):
+        if isinstance(v, str):
+            for member in FieldType:
+                if member.value.upper() == v.upper():
+                    return member.value
+        return v
+
+    @field_validator("type_parameters", mode="after")
+    @classmethod
+    def normalize_empty(cls, v: Optional[FieldTypeParametersUpdateDTO]):
+        if v is None:
+            return None
+        if all(value is None for value in v.model_dump().values()):
+            return None
+        return v
+
+    @field_validator("validation_condition", "relevance_condition", mode="before")
+    @classmethod
+    def normalize_empty_strings(cls, v):
+        if v is None:
+            return None
+        if isinstance(v, str) and not v.strip():
+            return None
+        return v
 
 
 class SchemaUpdateDTO(BaseModel):

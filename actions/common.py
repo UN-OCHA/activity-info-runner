@@ -34,7 +34,6 @@ async def collect_field_mappings(client: ActivityInfoClient, start_form_id: str)
     visited_forms = set()
     pending_forms = [start_form_id]
 
-    logging.info(f"Starting field mapping collection from form {start_form_id}")
     while pending_forms:
         form_id = pending_forms.pop(0)
         if form_id in visited_forms:
@@ -50,12 +49,18 @@ async def collect_field_mappings(client: ActivityInfoClient, start_form_id: str)
         for el in schema.elements:
             if el.code:
                 mappings[el.id] = el.code
-            if el.type.upper() == "REFERENCE" and el.typeParameters and el.typeParameters.range:
-                for r in el.typeParameters.range:
+            if el.type.upper() in ["REFERENCE",
+                                   "MULTISELECTREFERENCE"] and el.type_parameters and el.type_parameters.range:
+                for r in el.type_parameters.range:
                     ref_form_id = r.get("formId") or r.get("formClassId")
                     if ref_form_id:
                         if ref_form_id not in visited_forms and ref_form_id not in pending_forms:
                             pending_forms.append(ref_form_id)
+
+            if el.type.upper() == "SUBFORM" and el.type_parameters and el.type_parameters.form_id:
+                ref_form_id = el.type_parameters.form_id
+                if ref_form_id not in visited_forms and ref_form_id not in pending_forms:
+                    pending_forms.append(ref_form_id)
 
     logging.info(f"Collected {len(mappings)} field mappings across {len(visited_forms)} forms")
 

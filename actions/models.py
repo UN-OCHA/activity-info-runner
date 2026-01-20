@@ -1,8 +1,8 @@
-from typing import Dict, Any, Union, Optional, List, ClassVar
+from typing import Dict, Any, Union, Optional, List, ClassVar, Literal
 
 from pydantic import BaseModel
 
-from actions.dtos import FieldType
+from actions.dtos import SchemaFieldUpdateDTO
 
 
 class ActionBase(BaseModel):
@@ -20,12 +20,12 @@ class RecordBase(ActionBase):
 
 
 class RecordDeleteAction(RecordBase):
-    TYPE: ClassVar[str] = "DELETE"
+    TYPE: Literal["DELETE"] = "DELETE"
     pass
 
 
 class RecordUpdateAction(RecordBase):
-    TYPE: ClassVar[str] = "UPDATE"
+    TYPE: Literal["UPDATE"] = "UPDATE"
     order: int
     field_code: str
     field_value: str | float | int | None
@@ -33,7 +33,7 @@ class RecordUpdateAction(RecordBase):
 
 
 class RecordCreateAction(RecordBase):
-    TYPE: ClassVar[str] = "CREATE"
+    TYPE: Literal["CREATE"] = "CREATE"
     order: int
     fields: Dict[str, Any]
 
@@ -51,34 +51,22 @@ class FieldBase(ActionBase):
 
 
 class FieldDeleteAction(FieldBase):
-    TYPE: ClassVar[str] = "DELETE"
+    TYPE: Literal["DELETE"] = "DELETE"
     order: int
     old_formula: Optional[str] = None
     pass
 
 
 class FieldUpdateAction(FieldBase):
-    TYPE: ClassVar[str] = "UPDATE"
+    TYPE: Literal["UPDATE"] = "UPDATE"
     order: int
-    relevance_condition: Optional[str] = None
-    validation_condition: Optional[str] = None
-    formula: Optional[str]
-    old_formula: Optional[str] = None
+    old: SchemaFieldUpdateDTO
+    new: SchemaFieldUpdateDTO
 
 
-class FieldCreateAction(FieldBase):
-    TYPE: ClassVar[str] = "CREATE"
+class FieldCreateAction(FieldBase, SchemaFieldUpdateDTO):
+    TYPE: Literal["CREATE"] = "CREATE"
     order: int
-    label: str
-    relevance_condition: Optional[str] = None
-    validation_condition: Optional[str] = None
-    data_entry_visible: bool
-    table_visible: bool
-    required: bool
-    key: bool
-    type: FieldType
-    formula: Optional[str]
-    prefix_formula: Optional[str] = None
 
 
 FieldAction = Union[FieldCreateAction, FieldUpdateAction, FieldDeleteAction]
@@ -89,6 +77,7 @@ FieldAction = Union[FieldCreateAction, FieldUpdateAction, FieldDeleteAction]
 class Changeset(BaseModel):
     record_actions: List[RecordAction] = []
     field_actions: List[FieldAction] = []
+    logs: List[str] = []
 
     def __add__(self, other: "Changeset") -> "Changeset":
         if not isinstance(other, Changeset):
@@ -96,6 +85,7 @@ class Changeset(BaseModel):
         return Changeset(
             record_actions=self.record_actions + other.record_actions,
             field_actions=self.field_actions + other.field_actions,
+            logs=self.logs + other.logs
         )
 
     def as_tuple(self):
@@ -115,6 +105,10 @@ class Changeset(BaseModel):
 
     def __len__(self) -> int:
         return len(self.record_actions) + len(self.field_actions)
+
+    def to_dict(self) -> Dict[str, Any]:
+        """Convert changeset to dict using aliases for compatibility with ActivityInfo API and correct serialization."""
+        return self.model_dump(by_alias=True)
 
 
 # ------ Errors ------

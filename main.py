@@ -4,28 +4,27 @@ import logging
 import os
 
 from dotenv import load_dotenv
+from memory_profiler import profile
 
 from actions.calculation_formulas import get_operation_calculation_changesets
 from actions.metric_configuration import get_operation_metric_configuration_changesets
-from api import ActivityInfoClient
-from api.client import BASE_URL
 from debug import pretty_print_changeset
 
 
+@profile
 async def main(dry_run: bool, database_id: str):
     load_dotenv()
     api_token = os.getenv("API_TOKEN")
     if not api_token:
         raise ValueError("API_TOKEN environment variable is not set")
 
-    async with ActivityInfoClient(BASE_URL, api_token=os.getenv("API_TOKEN")) as client:
-        calculations_changeset = await get_operation_calculation_changesets(client, database_id)
-        metric_changeset = await get_operation_metric_configuration_changesets(client, database_id, order_start_idx=len(
-            calculations_changeset) + 1)
-        pretty_print_changeset(calculations_changeset + metric_changeset)
-        # if not dry_run and len(error_dtos) > 0:
-        #     await client.api.update_form_records(error_dtos)
-        #     logging.info("Updated operation calculation error records in Activity Info.")
+    calculations_changeset = await get_operation_calculation_changesets(database_id)
+    metric_changeset = await get_operation_metric_configuration_changesets(database_id)
+    pretty_print_changeset(calculations_changeset + metric_changeset)
+
+    # if not dry_run and len(error_dtos) > 0:
+    #     await client.api.update_form_records(error_dtos)
+    #     logging.info("Updated operation calculation error records in Activity Info.")
 
 
 if __name__ == '__main__':

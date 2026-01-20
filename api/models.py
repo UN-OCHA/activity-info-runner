@@ -2,6 +2,8 @@ from typing import List, Optional, Dict, Any
 
 from pydantic import BaseModel, Field, ConfigDict
 
+from actions.dtos import SchemaFieldUpdateDTO
+
 
 class OwnerRef(BaseModel):
     id: str
@@ -90,15 +92,6 @@ class OperationCalculationFormulasField(FormFields):
     errors: Optional[str] = Field(alias='ERRS')
 
 
-# class OperationDataFormsField(FormFields):
-#     sys_prefix: str = Field(alias='SYSPREFIX')
-#     entity_form: str = Field(alias='EFORM.@id')
-#     user_level: str = Field(alias='USERLEVEL.@id')
-#     process: str = Field(alias='PROCESS.@id')
-#     data_level: str = Field(alias='DATALEVEL.@id')
-#     composite_code: str = Field(alias='CCODE')
-
-
 class OperationMetricConfigurationField(FormFields):
     sort_order: str = Field(alias='SORTORDER')
     data_form_prefix: str = Field(alias='DFORM.SYSPREFIX')
@@ -128,24 +121,9 @@ class TypeParameters(BaseModel):
     aggregation: Optional[str] = None
 
 
-class FormElement(BaseModel):
-    id: str
-    code: Optional[str] = None
-    label: str
-    description: Optional[str] = None
-    relevanceCondition: Optional[str] = ""
-    validationCondition: Optional[str] = ""
-    required: Optional[bool] = False
-    type: str
-    key: Optional[bool] = False
-    dataEntryVisible: Optional[bool] = True
-    tableVisible: Optional[bool] = True
-    typeParameters: Optional[TypeParameters] = None
-
-
 class FormSchema(BaseModel):
     id: str
     schemaVersion: int
     databaseId: str
     label: str
-    elements: List[FormElement]
+    elements: List[SchemaFieldUpdateDTO]

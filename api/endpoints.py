@@ -1,5 +1,7 @@
 from typing import Any, List
 
+from aiocache import cached
+from aiocache.serializers import PickleSerializer
 from pydantic import ValidationError
 
 from actions.dtos import RecordUpdateDTO
@@ -28,7 +30,7 @@ class ActivityInfoEndpoints:
     async def get_form(self, form_id: str) -> List[RawFormPayload]:
         return await self._http.request("GET", f"/form/{form_id}/query")
 
-    @auto_cache(ttl=36000, model=FormSchema)
+    @cached(ttl=20, serializer=PickleSerializer())
     async def get_form_schema(self, form_id: str) -> FormSchema:
         raw = await self._http.request("GET", f"/form/{form_id}/schema")
         try:
@@ -84,4 +86,16 @@ class ActivityInfoEndpoints:
             "POST",
             "/update",
             json=payload,
+        )
+
+    async def update_form_schema(self, schema: FormSchema):
+        await self._http.request(
+            "POST",
+            f"/form/${schema.id}/schema",
+            json=schema.model_dump(
+                mode="json",
+                exclude_none=True,
+                exclude_unset=True,
+                by_alias=True,
+            )
         )

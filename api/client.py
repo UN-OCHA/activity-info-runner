@@ -1,18 +1,26 @@
 # client.py
 import asyncio
-import httpx
+
+from temporalio import workflow
+
+with workflow.unsafe.imports_passed_through():
+    import httpx
 from typing import Optional, Dict, Any
+
 
 # ---------- Exceptions ----------
 
 class APIError(Exception):
     pass
 
+
 class AuthenticationError(APIError):
     pass
 
+
 class APITimeoutError(APIError):
     pass
+
 
 # ---------- Client ----------
 
@@ -21,18 +29,19 @@ DEFAULT_HEADERS = {
     "Accept": "application/json",
 }
 
+
 class ActivityInfoHTTPClient:
     def __init__(
-        self,
-        base_url: str,
-        *,
-        api_token: Optional[str] = None,
-        timeout= httpx.Timeout(
-            connect=10.0,
-            read=60.0,
-            write=10.0,
-            pool=60.0
-        ),
+            self,
+            base_url: str,
+            *,
+            api_token: Optional[str] = None,
+            timeout=httpx.Timeout(
+                connect=10.0,
+                read=60.0,
+                write=10.0,
+                pool=60.0
+            ),
     ):
         headers = dict(DEFAULT_HEADERS)
         if api_token:
@@ -45,13 +54,13 @@ class ActivityInfoHTTPClient:
         )
 
     async def request(
-        self,
-        method: str,
-        path: str,
-        *,
-        params: Dict[str, Any] | None = None,
-        json: Dict[str, Any] | None = None,
-        retries: int = 3,
+            self,
+            method: str,
+            path: str,
+            *,
+            params: Dict[str, Any] | None = None,
+            json: Dict[str, Any] | None = None,
+            retries: int = 3,
     ) -> Any:
         for attempt in range(retries):
             try:

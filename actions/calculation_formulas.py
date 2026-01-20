@@ -1,14 +1,19 @@
 import inspect
 import logging
+import os
 from enum import StrEnum, auto
 from typing import List, Tuple, Dict, Optional
 
+from temporalio import activity
+
 from actions.common import resolve_form_from_prefix, convert_errors_to_record_actions, collect_field_mappings
+from actions.dtos import FieldTypeParametersUpdateDTO, SchemaFieldUpdateDTO
 from actions.models import Changeset, RecordError, FieldUpdateAction, RecordAction, RecordUpdateAction
 from api import ActivityInfoClient
+from api.client import BASE_URL
 from api.models import OperationCalculationFormulasField
 from parser import RecordResolver, ActivityInfoExpression
-from utils import build_nested_dict
+from utils import build_nested_dict, CaptureLogs
 
 CALCULATION_FORMULAS_FORM_PREFIX = "0.1.6_"
 
@@ -19,83 +24,94 @@ class OperationCalculationApplyType(StrEnum):
     UNKNOWN = auto()
 
 
-async def get_operation_calculation_changesets(client: ActivityInfoClient, database_id: str) -> Changeset:
+@activity.defn
+async def get_operation_calculation_changesets(database_id: str) -> Changeset:
     """Generates changesets for operation calculation formulas in the specified database.
     Args:
-        client: An instance of ActivityInfoClient to interact with the API.
         database_id: The ID of the database to process.
     Returns:
         A changeset of record and field actions (including errors as record actions)
     """
-    # 1: Locate the operation calculation formulas form
-    database_tree = await client.api.get_database_tree(database_id)
-    form_id = next(
-        (res.id for res in database_tree.resources if
-         res.type == "FORM" and res.label.startswith(CALCULATION_FORMULAS_FORM_PREFIX)),
-        None
-    )
-    form_name = next(
-        (res.label for res in database_tree.resources if
-         res.type == "FORM" and res.label.startswith(CALCULATION_FORMULAS_FORM_PREFIX)),
-        None
-    )
-    if not form_id:
-        raise ValueError("Operation Calculation Formulas form not found in the database tree")
+    with CaptureLogs() as log_handler:
+        client = ActivityInfoClient(BASE_URL, api_token=os.getenv("API_TOKEN"))
+        # 1: Locate the operation calculation formulas form
+        database_tree = await client.api.get_database_tree(database_id)
+        form_id = next(
+            (res.id for res in database_tree.resources if
+             res.type == "FORM" and res.label.startswith(CALCULATION_FORMULAS_FORM_PREFIX)),
+            None
+        )
+        form_name = next(
+            (res.label for res in database_tree.resources if
+             res.type == "FORM" and res.label.startswith(CALCULATION_FORMULAS_FORM_PREFIX)),
+            None
+        )
+        if not form_id:
+            raise ValueError("Operation Calculation Formulas form not found in the database tree")
 
-    # 2: Fetch the rows specifying operation calculation formulas
-    fields = await client.api.get_operation_calculation_formulas_fields(form_id)
-    logging.info(f"Retrieved {len(fields)} operation calculation formula fields")
-    internal_fields = [field for field in fields if field.apply == OperationCalculationApplyType.INTERNAL]
-    external_fields = [field for field in fields if field.apply == OperationCalculationApplyType.EXTERNAL]
+        # 2: Fetch the rows specifying operation calculation formulas
+        fields = await client.api.get_operation_calculation_formulas_fields(form_id)
+        logging.info(f"Retrieved {len(fields)} operation calculation formula fields")
+        internal_fields = [field for field in fields if field.apply == OperationCalculationApplyType.INTERNAL]
+        external_fields = [field for field in fields if field.apply == OperationCalculationApplyType.EXTERNAL]
 
-    # 3: Generate internal changeset entries (to replace form schema formulas)
-    internal_changeset, internal_errors = await get_internal_operation_calculation_changeset_entries(client,
-                                                                                                     database_id,
-                                                                                                     internal_fields)
-    logging.info(f"Computed {len(internal_changeset)} internal changeset entries")
-    for i, entry in enumerate(internal_changeset.field_actions, start=1): entry.order = i
+        # 3: Generate internal changeset entries (to replace form schema formulas)
+        internal_changeset, internal_errors = await get_internal_operation_calculation_changeset_entries(client,
+                                                                                                         database_id,
+                                                                                                         internal_fields)
+        logging.info(f"Computed {len(internal_changeset)} internal changeset entries")
+        for i, entry in enumerate(internal_changeset.field_actions, start=1): entry.order = i
 
-    # 4: Generate external changeset entries (to update existing records)
-    external_changeset, external_errors = await get_external_operation_calculation_changeset_entries(client,
-                                                                                                     database_id,
-                                                                                                     external_fields)
-    logging.info(f"Computed {len(external_changeset)} external changeset entries")
-    for i, entry in enumerate(external_changeset.record_actions, start=len(internal_changeset) + 1): entry.order = i
+        # 4: Generate external changeset entries (to update existing records)
+        external_changeset, external_errors = await get_external_operation_calculation_changeset_entries(client,
+                                                                                                         database_id,
+                                                                                                         external_fields)
+        logging.info(f"Computed {len(external_changeset)} external changeset entries")
+        for i, entry in enumerate(external_changeset.record_actions, start=len(internal_changeset) + 1): entry.order = i
 
-    errors = internal_errors + external_errors
-    for i in range(len(errors)):
-        errors[i].form_id = form_id
-        errors[i].form_name = form_name
-    error_actions = await convert_errors_to_record_actions(errors)
-    error_actions = revert_extra_errors(form_id, error_actions, fields)
-    for i, entry in enumerate(error_actions,
-                              start=len(internal_changeset) + len(external_changeset) + 1): entry.order = i
+        errors = internal_errors + external_errors
+        for i in range(len(errors)):
+            errors[i].form_id = form_id
+            errors[i].form_name = form_name
+        error_actions = await convert_errors_to_record_actions(errors)
+        error_actions = revert_extra_errors(form_id, error_actions, fields)
+        for i, entry in enumerate(error_actions,
+                                  start=len(internal_changeset) + len(external_changeset) + 1): entry.order = i
 
-    return internal_changeset + external_changeset + Changeset.from_record_actions(error_actions)
+        res = internal_changeset + external_changeset + Changeset.from_record_actions(error_actions)
+        res.logs = log_handler.records
+        return res
 
 
-async def get_internal_operation_calculation_changeset_entries(client: ActivityInfoClient, database_id: str,
-                                                               internal_fields: List[
-                                                                   OperationCalculationFormulasField]) -> Tuple[
-    Changeset, List[RecordError]]:
+async def get_internal_operation_calculation_changeset_entries(
+        client: ActivityInfoClient,
+        database_id: str,
+        internal_fields: List[OperationCalculationFormulasField]
+) -> Tuple[Changeset, List[RecordError]]:
     """Generates changeset entries for internal operation calculation formulas.
+
     Args:
         client: An instance of ActivityInfoClient to interact with the API.
         database_id: The ID of the database to process.
         internal_fields: A list of OperationCalculationFormulasField objects representing internal fields.
+
     Returns:
         A tuple containing:
-            - A changeset of record actions
+            - A changeset of field actions
             - A list of record errors
     """
     origin = inspect.currentframe().f_code.co_name
     errors: List[RecordError] = []
+
+    # Sort fields in reference order
     internal_fields.sort(key=lambda x: x.ref_order)
+
+    # Group fields by (form_id, field_code)
     grouped_fields: Dict[Tuple[str, str], List[OperationCalculationFormulasField]] = {}
     form_names: Dict[Tuple[str, str], str] = {}
 
     for field in internal_fields:
-        # 1: Resolve the actual form ID from the sys_prefix (i.e: 2.1A -> c41sw8jmkcry89xi)
+        # Resolve form from sys_prefix
         form = await resolve_form_from_prefix(client, database_id, field.sys_prefix)
         if not form:
             errors.append(RecordError(
@@ -107,9 +123,10 @@ async def get_internal_operation_calculation_changeset_entries(client: ActivityI
                 error_message=f"Could not resolve form ID for prefix {field.sys_prefix}"
             ))
             continue
+
         field_code = f"{field.sys_field}_ICALC"
 
-        # 2: Validate the filter and formula expressions by parsing them
+        # Validate filter and formula
         _, _, parse_errors = parse_expressions_with_errors(form.id, field, field_code)
         if parse_errors:
             for e in parse_errors:
@@ -117,34 +134,108 @@ async def get_internal_operation_calculation_changeset_entries(client: ActivityI
             errors.extend(parse_errors)
             continue
 
-        # 3: Group fields by (form_id, field_code) to combine multiple conditions later
+        # Group fields for combining formulas
         key = (form.id, field_code)
-        if key not in grouped_fields:
-            grouped_fields[key] = []
-        grouped_fields[key].append(field)
+        grouped_fields.setdefault(key, []).append(field)
         form_names[key] = form.label
 
-    # 4: For each group, combine the formulas using nested IF statements based on the filters
+    # Prepare field actions
     field_actions: List[FieldUpdateAction] = []
     skip_unchanged_count = 0
+
     for (form_id, field_code), fields in grouped_fields.items():
         fields.sort(key=lambda x: x.ref_order)
         reversed_fields = list(reversed(fields))
-        last = reversed_fields[0]
-        expr = f"IF({last.filter}, {last.formula})"
+
+        # Combine formulas with nested IFs
+        combined_expr = f"IF({reversed_fields[0].filter}, {reversed_fields[0].formula})"
         for f in reversed_fields[1:]:
-            expr = f"IF({f.filter}, {f.formula}, {expr})"
+            combined_expr = f"IF({f.filter}, {f.formula}, {combined_expr})"
+
+        # Fetch the current schema
         old_form = await client.api.get_form_schema(form_id)
-        old_formula = next(
-            (e.typeParameters.formula for e in old_form.elements if e.code == field_code)
-        )
+        old_field = next((e for e in old_form.elements if e.code == field_code), None)
+
+        if old_field is None:
+            errors.append(RecordError(
+                form_id=form_id,
+                form_name=form_names[(form_id, field_code)],
+                origin=origin,
+                record_id="",
+                field_code=field_code,
+                error_message="Field not found in form schema"
+            ))
+            continue
+
+        # Collect field mappings for formula normalization
         field_lookup = await collect_field_mappings(client, form_id)
         sorted_keys = sorted(field_lookup.keys(), key=len, reverse=True)
-        for k in sorted_keys:
-            old_formula = old_formula.replace(k, field_lookup[k])
-        if old_formula == expr:
-            skip_unchanged_count += 1
-            continue
+
+        def replace_ids_with_codes(text: str) -> str:
+            if not text:
+                return text
+            for k in sorted_keys:
+                text = text.replace(k, field_lookup[k])
+            return text
+
+        # Prepare base for new field data
+        new_field_data = old_field.model_dump(by_alias=True)
+        
+        # Normalize Relevance Condition
+        if old_field.relevance_condition:
+            new_field_data["relevanceCondition"] = replace_ids_with_codes(old_field.relevance_condition)
+            
+        # Normalize Validation Condition
+        if old_field.validation_condition:
+            new_field_data["validationCondition"] = replace_ids_with_codes(old_field.validation_condition)
+
+        # Normalize the old formula
+        if old_field.type_parameters is not None:
+            old_formula = old_field.type_parameters.formula
+            # Also normalize the formula in the OLD field representation for consistent diffs
+            normalized_old_formula = replace_ids_with_codes(old_formula)
+
+            # Prepare normalized old using model_dump/validate
+            normalized_old_data = old_field.model_dump(by_alias=True)
+            normalized_old_tp = old_field.type_parameters.model_dump(by_alias=True)
+            normalized_old_tp["formula"] = normalized_old_formula
+            normalized_old_data["typeParameters"] = normalized_old_tp
+            
+            # Apply condition updates to normalized_old as well
+            if "relevanceCondition" in new_field_data:
+                normalized_old_data["relevanceCondition"] = new_field_data["relevanceCondition"]
+            if "validationCondition" in new_field_data:
+                normalized_old_data["validationCondition"] = new_field_data["validationCondition"]
+                
+            normalized_old = SchemaFieldUpdateDTO.model_validate(normalized_old_data)
+
+            if normalized_old_formula == combined_expr:
+                skip_unchanged_count += 1
+                continue
+
+            # Create the new field with updated type_parameters
+            new_tp_data = normalized_old.type_parameters.model_dump(by_alias=True)
+            new_tp_data["formula"] = combined_expr
+            
+            # Update type parameters in new_field_data
+            new_field_data["typeParameters"] = new_tp_data
+            
+            new = SchemaFieldUpdateDTO.model_validate(new_field_data)
+
+        else:
+            # If no type parameters, normalized_old is just old_field but with updated conditions
+            normalized_old_data = old_field.model_dump(by_alias=True)
+            if "relevanceCondition" in new_field_data:
+                normalized_old_data["relevanceCondition"] = new_field_data["relevanceCondition"]
+            if "validationCondition" in new_field_data:
+                normalized_old_data["validationCondition"] = new_field_data["validationCondition"]
+            
+            normalized_old = SchemaFieldUpdateDTO.model_validate(normalized_old_data)
+            
+            new_type_parameters = FieldTypeParametersUpdateDTO(formula=combined_expr)
+            new_field_data["typeParameters"] = new_type_parameters
+            new = SchemaFieldUpdateDTO.model_validate(new_field_data)
+
         field_actions.append(FieldUpdateAction(
             origin=origin,
             database_id=database_id,
@@ -152,8 +243,8 @@ async def get_internal_operation_calculation_changeset_entries(client: ActivityI
             form_name=form_names[(form_id, field_code)],
             field_code=field_code,
             order=fields[-1].ref_order,
-            formula=expr,
-            old_formula=old_formula
+            old=normalized_old,
+            new=new
         ))
 
     logging.info(f"Skipped {skip_unchanged_count} fields due to unchanged formulae")
