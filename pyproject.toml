@@ -10,6 +10,9 @@ dependencies = [
     "lark",
     "aiocache[redis]>=0.12.3",
     "rich>=14.2.0",
+    "fastapi",
+    "uvicorn",
+    "temporalio",
 ]
 
 [tool.pytest.ini_options]

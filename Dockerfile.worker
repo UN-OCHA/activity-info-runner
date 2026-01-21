@@ -1,0 +1,18 @@
+FROM python:3.11-slim
+
+# Install uv
+RUN pip install uv
+
+WORKDIR /app
+
+# Copy dependency files first to leverage caching
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies
+RUN uv sync
+
+# Copy the rest of the application
+COPY . .
+
+# Run the worker
+CMD ["uv", "run", "python", "worker.py"]

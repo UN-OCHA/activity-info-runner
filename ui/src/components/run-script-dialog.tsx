@@ -10,7 +10,7 @@ import {
 import { Select } from "@blueprintjs/select";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { queryClient, titleCase, toaster } from "../utils";
+import { API_BASE, queryClient, titleCase, toaster } from "../utils";
 
 export default function RunScriptDialog() {
   const [open, setOpen] = useState(false);
@@ -19,14 +19,14 @@ export default function RunScriptDialog() {
   const { data } = useQuery({
     queryKey: ["scripts"],
     queryFn: async () => {
-      const res = await fetch("http://127.0.0.1:8000/scripts");
+      const res = await fetch(`${API_BASE}/scripts`);
       return (await res.json()) as string[];
     },
   });
   const { mutate } = useMutation({
     mutationFn: async () =>
       await fetch(
-        `http://127.0.0.1:8000/workflows/${scriptName}?database_id=${databaseId}`,
+        `${API_BASE}/workflows/${scriptName}?database_id=${databaseId}`,
         {
           method: "POST",
         },

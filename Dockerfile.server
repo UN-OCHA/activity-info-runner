@@ -1,0 +1,23 @@
+FROM python:3.11-slim
+
+# Install uv
+RUN pip install uv
+
+WORKDIR /app
+
+# Copy dependency files first to leverage caching
+COPY pyproject.toml uv.lock ./
+
+# Install dependencies
+# We use 'uv sync' to create the environment. 
+# Since we modified pyproject.toml, we don't use --frozen to allow lockfile update.
+RUN uv sync
+
+# Copy the rest of the application
+COPY . .
+
+# Expose the server port
+EXPOSE 8000
+
+# Run the server
+CMD ["uv", "run", "uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]

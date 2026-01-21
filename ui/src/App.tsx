@@ -7,13 +7,14 @@ import AppNavbar from "./components/app-navbar";
 import ChangesetPanel from "./components/changeset-panel";
 import RunsList from "./components/runs-list";
 import type { WorkflowRun } from "./types";
+import { API_BASE } from "./utils";
 
 function App() {
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
   const { data } = useQuery({
     queryKey: ["workflows"],
     queryFn: async () => {
-      const res = await fetch("http://127.0.0.1:8000/workflows");
+      const res = await fetch(`${API_BASE}/workflows`);
       return (await res.json()) as WorkflowRun[];
     },
     refetchInterval: 5000,

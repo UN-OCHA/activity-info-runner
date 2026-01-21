@@ -12,7 +12,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useId, useState } from "react";
 import type { WorkflowRun } from "../types";
-import { titleCase } from "../utils";
+import { API_BASE, titleCase } from "../utils";
 import FieldActionsTable from "./field-actions-table";
 import LogsTable from "./logs-table";
 import RecordActionsTable from "./record-actions-table";
@@ -29,7 +29,7 @@ export default function ChangesetPanel({
     queryKey: ["workflows", workflowId, runId],
     queryFn: async () => {
       const res = await fetch(
-        `http://127.0.0.1:8000/workflows/${workflowId}/${runId}`,
+        `${API_BASE}/workflows/${workflowId}/${runId}`,
       );
       return (await res.json()) as WorkflowRun;
     },

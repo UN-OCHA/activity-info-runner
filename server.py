@@ -1,4 +1,4 @@
-import subprocess
+import os
 import uuid
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -21,7 +21,7 @@ async def lifespan(instance: FastAPI):
     """ Run at startup
         Initialize the Client and add it to app.state
     """
-    client = await Client.connect("localhost:7233")
+    client = await Client.connect(os.getenv("TEMPORAL_HOST", "localhost:7233"))
     instance.state.client = client
     yield
 
@@ -34,10 +34,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-
-def get_git_revision_short_hash() -> str:
-    return subprocess.check_output(['git', 'rev-parse', '--short', 'HEAD']).decode('ascii').strip()
 
 
 def safe_timestamp_to_datetime(ts) -> datetime:
@@ -53,7 +49,7 @@ def safe_timestamp_to_datetime(ts) -> datetime:
 @app.get("/")
 @cache
 def read_root():
-    return {"app": "Activity Info Runner", "version": get_git_revision_short_hash()}
+    return {"app": "Activity Info Runner", "version": os.getenv("APP_VERSION", "dev")}
 
 
 @app.get("/scripts")

@@ -1,12 +1,13 @@
 import json
+import os
 from functools import wraps
 from aiocache import Cache
 from aiocache.serializers import PickleSerializer
 
 cache = Cache(
     Cache.REDIS,
-    endpoint="localhost",
-    port=6379,
+    endpoint=os.getenv("REDIS_HOST", "localhost"),
+    port=int(os.getenv("REDIS_PORT", 6379)),
     namespace="activity_info",
     ttl=3600,
     serializer=PickleSerializer()
