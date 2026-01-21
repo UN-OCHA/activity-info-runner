@@ -109,9 +109,7 @@ services:
       - app-network
 
   server:
-    # Replace <OWNER>/<REPO> with your actual GitHub username and repository name
-    # e.g., ghcr.io/johndoe/activity-info-runner/server:latest
-    image: ghcr.io/${GITHUB_REPOSITORY:-UN-OCHA/activity-info-runner}/server:latest
+    image: ghcr.io/${GITHUB_REPOSITORY:-un-ocha/activity-info-runner}/server:latest
     restart: always
     ports:
       - "8000:8000"
@@ -127,7 +125,7 @@ services:
       - app-network
 
   worker:
-    image: ghcr.io/${GITHUB_REPOSITORY:-UN-OCHA/activity-info-runner}/worker:latest
+    image: ghcr.io/${GITHUB_REPOSITORY:-un-ocha/activity-info-runner}/worker:latest
     restart: always
     environment:
       - TEMPORAL_HOST=temporal:7233
@@ -145,7 +143,7 @@ services:
       - app-network
 
   frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-UN-OCHA/activity-info-runner}/ui-frontend:latest
+    image: ghcr.io/${GITHUB_REPOSITORY:-un-ocha/activity-info-runner}/ui-frontend:latest
     restart: always
     ports:
       - "8080:80"
