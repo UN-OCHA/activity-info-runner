@@ -91,12 +91,12 @@ services:
     entrypoint: [ "/bin/sh" ]
     command: >
       -c "
-      NAMESPACE=\${DEFAULT_NAMESPACE:-default};
-      TEMPORAL_ADDRESS=\${TEMPORAL_ADDRESS:-temporal:7233};
+      NAMESPACE=$${DEFAULT_NAMESPACE:-default};
+      TEMPORAL_ADDRESS=$${TEMPORAL_ADDRESS:-temporal:7233};
       echo 'Waiting for Temporal server...';
       sleep 10;
       echo 'Creating namespace...';
-      temporal operator namespace describe -n \$NAMESPACE --address \$TEMPORAL_ADDRESS || temporal operator namespace create -n \$NAMESPACE --address \$TEMPORAL_ADDRESS;
+      temporal operator namespace describe -n $$NAMESPACE --address $$TEMPORAL_ADDRESS || temporal operator namespace create -n $$NAMESPACE --address $$TEMPORAL_ADDRESS;
       echo 'Namespace setup complete';
       "
 
@@ -111,7 +111,7 @@ services:
   server:
     # Replace <OWNER>/<REPO> with your actual GitHub username and repository name
     # e.g., ghcr.io/johndoe/activity-info-runner/server:latest
-    image: ghcr.io/${GITHUB_REPOSITORY:-owner/repo}/server:latest
+    image: ghcr.io/${GITHUB_REPOSITORY:-UN-OCHA/activity-info-runner}/server:latest
     restart: always
     ports:
       - "8000:8000"
@@ -127,7 +127,7 @@ services:
       - app-network
 
   worker:
-    image: ghcr.io/${GITHUB_REPOSITORY:-owner/repo}/worker:latest
+    image: ghcr.io/${GITHUB_REPOSITORY:-UN-OCHA/activity-info-runner}/worker:latest
     restart: always
     environment:
       - TEMPORAL_HOST=temporal:7233
@@ -145,7 +145,7 @@ services:
       - app-network
 
   frontend:
-    image: ghcr.io/${GITHUB_REPOSITORY:-owner/repo}/ui-frontend:latest
+    image: ghcr.io/${GITHUB_REPOSITORY:-UN-OCHA/activity-info-runner}/ui-frontend:latest
     restart: always
     ports:
       - "8080:80"
