@@ -76,7 +76,7 @@ class ActivityInfoHTTPClient:
 
                 if response.status_code >= 400:
                     raise APIError(
-                        f"Error requesting {method} {path}: {response.status_code}: {response.text}"
+                        f"Error requesting {method} {response.url}: {response.status_code}: {response.text}"
                     )
 
                 if not response.content:
