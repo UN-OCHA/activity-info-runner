@@ -18,7 +18,7 @@ class ActivityInfoEndpoints:
 
     @auto_cache(ttl=36000, model=DatabaseTree)
     async def get_database_tree(self, database_id: str) -> DatabaseTree:
-        raw = await self._http.request("GET", f"/databases/{database_id}")
+        raw = await self._http.request("GET", f"databases/{database_id}")
         try:
             return DatabaseTree.model_validate(raw)
         except ValidationError as e:
@@ -28,11 +28,11 @@ class ActivityInfoEndpoints:
 
     @auto_cache(ttl=36000)
     async def get_form(self, form_id: str) -> List[RawFormPayload]:
-        return await self._http.request("GET", f"/form/{form_id}/query")
+        return await self._http.request("GET", f"form/{form_id}/query")
 
     @cached(ttl=20, serializer=PickleSerializer())
     async def get_form_schema(self, form_id: str) -> FormSchema:
-        raw = await self._http.request("GET", f"/form/{form_id}/schema")
+        raw = await self._http.request("GET", f"form/{form_id}/schema")
         try:
             return FormSchema.model_validate(raw)  # parse dict into Pydantic model
         except ValidationError as e:
@@ -84,14 +84,14 @@ class ActivityInfoEndpoints:
         }
         await self._http.request(
             "POST",
-            "/update",
+            "update",
             json=payload,
         )
 
     async def update_form_schema(self, schema: FormSchema):
         await self._http.request(
             "POST",
-            f"/form/${schema.id}/schema",
+            f"form/{schema.id}/schema",
             json=schema.model_dump(
                 mode="json",
                 exclude_none=True,

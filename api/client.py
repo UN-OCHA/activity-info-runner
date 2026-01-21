@@ -48,7 +48,7 @@ class ActivityInfoHTTPClient:
             headers["Authorization"] = f"Bearer {api_token}"
 
         self._client = httpx.AsyncClient(
-            base_url=base_url.rstrip("/"),
+            base_url=base_url,
             headers=headers,
             timeout=timeout,
         )
@@ -76,7 +76,7 @@ class ActivityInfoHTTPClient:
 
                 if response.status_code >= 400:
                     raise APIError(
-                        f"{response.status_code}: {response.text}"
+                        f"Error requesting {method} {path}: {response.status_code}: {response.text}"
                     )
 
                 if not response.content:

@@ -10,6 +10,9 @@ from workflows.workflows import RunScriptWorkflow, SCRIPTS, TASK_QUEUE
 
 async def main():
     load_dotenv()
+    if not os.getenv("API_TOKEN"):
+        print("WARNING: API_TOKEN is not set. Worker may fail to authenticate with ActivityInfo.")
+    
     client = await Client.connect(os.getenv("TEMPORAL_HOST", "localhost:7233"))
     worker = Worker(
         client,

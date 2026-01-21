@@ -34,23 +34,19 @@ async def get_operation_calculation_changesets(database_id: str) -> Changeset:
     """
     with CaptureLogs() as log_handler:
         client = ActivityInfoClient(BASE_URL, api_token=os.getenv("API_TOKEN"))
+
         # 1: Locate the operation calculation formulas form
         database_tree = await client.api.get_database_tree(database_id)
-        form_id = next(
-            (res.id for res in database_tree.resources if
+        formulas_form = next(
+            (res for res in database_tree.resources if
              res.type == "FORM" and res.label.startswith(CALCULATION_FORMULAS_FORM_PREFIX)),
             None
         )
-        form_name = next(
-            (res.label for res in database_tree.resources if
-             res.type == "FORM" and res.label.startswith(CALCULATION_FORMULAS_FORM_PREFIX)),
-            None
-        )
-        if not form_id:
+        if not formulas_form:
             raise ValueError("Operation Calculation Formulas form not found in the database tree")
 
         # 2: Fetch the rows specifying operation calculation formulas
-        fields = await client.api.get_operation_calculation_formulas_fields(form_id)
+        fields = await client.api.get_operation_calculation_formulas_fields(formulas_form.id)
         logging.info(f"Retrieved {len(fields)} operation calculation formula fields")
         internal_fields = [field for field in fields if field.apply == OperationCalculationApplyType.INTERNAL]
         external_fields = [field for field in fields if field.apply == OperationCalculationApplyType.EXTERNAL]
@@ -71,10 +67,10 @@ async def get_operation_calculation_changesets(database_id: str) -> Changeset:
 
         errors = internal_errors + external_errors
         for i in range(len(errors)):
-            errors[i].form_id = form_id
-            errors[i].form_name = form_name
+            errors[i].form_id = formulas_form.id
+            errors[i].form_name = formulas_form.label
         error_actions = await convert_errors_to_record_actions(errors)
-        error_actions = revert_extra_errors(form_id, error_actions, fields)
+        error_actions = revert_extra_errors(formulas_form.id, error_actions, fields)
         for i, entry in enumerate(error_actions,
                                   start=len(internal_changeset) + len(external_changeset) + 1): entry.order = i
 
@@ -180,11 +176,11 @@ async def get_internal_operation_calculation_changeset_entries(
 
         # Prepare base for new field data
         new_field_data = old_field.model_dump(by_alias=True)
-        
+
         # Normalize Relevance Condition
         if old_field.relevance_condition:
             new_field_data["relevanceCondition"] = replace_ids_with_codes(old_field.relevance_condition)
-            
+
         # Normalize Validation Condition
         if old_field.validation_condition:
             new_field_data["validationCondition"] = replace_ids_with_codes(old_field.validation_condition)
@@ -200,13 +196,13 @@ async def get_internal_operation_calculation_changeset_entries(
             normalized_old_tp = old_field.type_parameters.model_dump(by_alias=True)
             normalized_old_tp["formula"] = normalized_old_formula
             normalized_old_data["typeParameters"] = normalized_old_tp
-            
+
             # Apply condition updates to normalized_old as well
             if "relevanceCondition" in new_field_data:
                 normalized_old_data["relevanceCondition"] = new_field_data["relevanceCondition"]
             if "validationCondition" in new_field_data:
                 normalized_old_data["validationCondition"] = new_field_data["validationCondition"]
-                
+
             normalized_old = SchemaFieldUpdateDTO.model_validate(normalized_old_data)
 
             if normalized_old_formula == combined_expr:
@@ -216,10 +212,10 @@ async def get_internal_operation_calculation_changeset_entries(
             # Create the new field with updated type_parameters
             new_tp_data = normalized_old.type_parameters.model_dump(by_alias=True)
             new_tp_data["formula"] = combined_expr
-            
+
             # Update type parameters in new_field_data
             new_field_data["typeParameters"] = new_tp_data
-            
+
             new = SchemaFieldUpdateDTO.model_validate(new_field_data)
 
         else:
@@ -229,9 +225,9 @@ async def get_internal_operation_calculation_changeset_entries(
                 normalized_old_data["relevanceCondition"] = new_field_data["relevanceCondition"]
             if "validationCondition" in new_field_data:
                 normalized_old_data["validationCondition"] = new_field_data["validationCondition"]
-            
+
             normalized_old = SchemaFieldUpdateDTO.model_validate(normalized_old_data)
-            
+
             new_type_parameters = FieldTypeParametersUpdateDTO(formula=combined_expr)
             new_field_data["typeParameters"] = new_type_parameters
             new = SchemaFieldUpdateDTO.model_validate(new_field_data)
