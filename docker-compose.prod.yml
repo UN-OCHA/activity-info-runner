@@ -1,6 +1,6 @@
 services:
   postgresql:
-    image: postgres:12
+    image: postgres:16
     container_name: temporal-postgresql
     restart: always
     environment:
@@ -18,7 +18,7 @@ services:
       start_period: 30s
 
   temporal-admin-tools:
-    image: temporalio/admin-tools:1.24.0
+    image: temporalio/admin-tools:1.29.1-tctl-1.18.4-cli-1.5.0
     container_name: temporal-admin-tools
     restart: on-failure:6
     depends_on:
@@ -50,7 +50,7 @@ services:
       "
 
   temporal:
-    image: temporalio/server:1.24.0
+    image: temporalio/server:1.29.1
     container_name: temporal
     restart: always
     depends_on:
@@ -77,7 +77,7 @@ services:
       retries: 60
 
   temporal-create-namespace:
-    image: temporalio/admin-tools:1.24.0
+    image: temporalio/admin-tools:1.29.1-tctl-1.18.4-cli-1.5.0
     container_name: temporal-create-namespace
     restart: on-failure:5
     depends_on:
