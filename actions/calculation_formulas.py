@@ -5,12 +5,13 @@ from enum import StrEnum, auto
 from typing import List, Tuple, Dict, Optional
 
 from temporalio import activity
+from temporalio.exceptions import ApplicationError
 
 from actions.common import resolve_form_from_prefix, convert_errors_to_record_actions, collect_field_mappings
 from actions.dtos import FieldTypeParametersUpdateDTO, SchemaFieldUpdateDTO
 from actions.models import Changeset, RecordError, FieldUpdateAction, RecordAction, RecordUpdateAction
 from api import ActivityInfoClient
-from api.client import BASE_URL
+from api.client import BASE_URL, APIError
 from api.models import OperationCalculationFormulasField
 from parser import RecordResolver, ActivityInfoExpression
 from utils import build_nested_dict, CaptureLogs
@@ -32,51 +33,56 @@ async def get_operation_calculation_changesets(database_id: str) -> Changeset:
     Returns:
         A changeset of record and field actions (including errors as record actions)
     """
-    with CaptureLogs() as log_handler:
-        client = ActivityInfoClient(BASE_URL, api_token=os.getenv("API_TOKEN"))
+    try:
+        with CaptureLogs() as log_handler:
+            client = ActivityInfoClient(BASE_URL, api_token=os.getenv("API_TOKEN"))
 
-        # 1: Locate the operation calculation formulas form
-        database_tree = await client.api.get_database_tree(database_id)
-        formulas_form = next(
-            (res for res in database_tree.resources if
-             res.type == "FORM" and res.label.startswith(CALCULATION_FORMULAS_FORM_PREFIX)),
-            None
-        )
-        if not formulas_form:
-            raise ValueError("Operation Calculation Formulas form not found in the database tree")
+            # 1: Locate the operation calculation formulas form
+            database_tree = await client.api.get_database_tree(database_id)
+            formulas_form = next(
+                (res for res in database_tree.resources if
+                 res.type == "FORM" and res.label.startswith(CALCULATION_FORMULAS_FORM_PREFIX)),
+                None
+            )
+            if not formulas_form:
+                raise ValueError("Operation Calculation Formulas form not found in the database tree")
 
-        # 2: Fetch the rows specifying operation calculation formulas
-        fields = await client.api.get_operation_calculation_formulas_fields(formulas_form.id)
-        logging.info(f"Retrieved {len(fields)} operation calculation formula fields")
-        internal_fields = [field for field in fields if field.apply == OperationCalculationApplyType.INTERNAL]
-        external_fields = [field for field in fields if field.apply == OperationCalculationApplyType.EXTERNAL]
+            # 2: Fetch the rows specifying operation calculation formulas
+            fields = await client.api.get_operation_calculation_formulas_fields(formulas_form.id)
+            logging.info(f"Retrieved {len(fields)} operation calculation formula fields")
+            internal_fields = [field for field in fields if field.apply == OperationCalculationApplyType.INTERNAL]
+            external_fields = [field for field in fields if field.apply == OperationCalculationApplyType.EXTERNAL]
 
-        # 3: Generate internal changeset entries (to replace form schema formulas)
-        internal_changeset, internal_errors = await get_internal_operation_calculation_changeset_entries(client,
-                                                                                                         database_id,
-                                                                                                         internal_fields)
-        logging.info(f"Computed {len(internal_changeset)} internal changeset entries")
-        for i, entry in enumerate(internal_changeset.field_actions, start=1): entry.order = i
+            # 3: Generate internal changeset entries (to replace form schema formulas)
+            internal_changeset, internal_errors = await get_internal_operation_calculation_changeset_entries(client,
+                                                                                                             database_id,
+                                                                                                             internal_fields)
+            logging.info(f"Computed {len(internal_changeset)} internal changeset entries")
+            for i, entry in enumerate(internal_changeset.field_actions, start=1): entry.order = i
 
-        # 4: Generate external changeset entries (to update existing records)
-        external_changeset, external_errors = await get_external_operation_calculation_changeset_entries(client,
-                                                                                                         database_id,
-                                                                                                         external_fields)
-        logging.info(f"Computed {len(external_changeset)} external changeset entries")
-        for i, entry in enumerate(external_changeset.record_actions, start=len(internal_changeset) + 1): entry.order = i
+            # 4: Generate external changeset entries (to update existing records)
+            external_changeset, external_errors = await get_external_operation_calculation_changeset_entries(client,
+                                                                                                             database_id,
+                                                                                                             external_fields)
+            logging.info(f"Computed {len(external_changeset)} external changeset entries")
+            for i, entry in enumerate(external_changeset.record_actions, start=len(internal_changeset) + 1): entry.order = i
 
-        errors = internal_errors + external_errors
-        for i in range(len(errors)):
-            errors[i].form_id = formulas_form.id
-            errors[i].form_name = formulas_form.label
-        error_actions = await convert_errors_to_record_actions(errors)
-        error_actions = revert_extra_errors(formulas_form.id, error_actions, fields)
-        for i, entry in enumerate(error_actions,
-                                  start=len(internal_changeset) + len(external_changeset) + 1): entry.order = i
+            errors = internal_errors + external_errors
+            for i in range(len(errors)):
+                errors[i].form_id = formulas_form.id
+                errors[i].form_name = formulas_form.label
+            error_actions = await convert_errors_to_record_actions(errors)
+            error_actions = revert_extra_errors(formulas_form.id, error_actions, fields)
+            for i, entry in enumerate(error_actions,
+                                      start=len(internal_changeset) + len(external_changeset) + 1): entry.order = i
 
-        res = internal_changeset + external_changeset + Changeset.from_record_actions(error_actions)
-        res.logs = log_handler.records
-        return res
+            res = internal_changeset + external_changeset + Changeset.from_record_actions(error_actions)
+            res.logs = log_handler.records
+            return res
+    except APIError as e:
+        if e.status_code == 404:
+            raise ApplicationError(str(e), non_retryable=True) from e
+        raise e
 
 
 async def get_internal_operation_calculation_changeset_entries(

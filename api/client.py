@@ -11,7 +11,9 @@ from typing import Optional, Dict, Any
 # ---------- Exceptions ----------
 
 class APIError(Exception):
-    pass
+    def __init__(self, message: str, status_code: Optional[int] = None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class AuthenticationError(APIError):
@@ -76,7 +78,8 @@ class ActivityInfoHTTPClient:
 
                 if response.status_code >= 400:
                     raise APIError(
-                        f"Error requesting {method} {response.url}: {response.status_code}: {response.text}"
+                        f"Error requesting {method} {response.url}: {response.status_code}: {response.text}",
+                        status_code=response.status_code
                     )
 
                 if not response.content:
