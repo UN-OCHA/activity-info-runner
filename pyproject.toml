@@ -13,6 +13,7 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "temporalio",
+    "neo4j"
 ]
 
 [tool.pytest.ini_options]
