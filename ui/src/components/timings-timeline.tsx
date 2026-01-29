@@ -52,7 +52,7 @@ export default function TimingsTimeline({
         {sortedTimings.map((timing, i) => {
           const { left, width } = getPosition(timing.startDate, timing.endDate);
           const isWorkflow = timing.type === "workflow";
-          const colorClass = isWorkflow ? "bg-blue-500" : "bg-teal-400";
+          const colorClass = isWorkflow ? "bg-blue-500" : "bg-blue-200";
           const label = timing.name;
           const durationSec = (
             differenceInMilliseconds(timing.endDate, timing.startDate) / 1000

@@ -4,14 +4,12 @@ import logging
 import os
 
 from dotenv import load_dotenv
-from memory_profiler import profile
+from scripts.calculation_formulas import get_operation_calculation_changesets
+from scripts.metric_configuration import get_operation_metric_configuration_changesets
 
-from actions.calculation_formulas import get_operation_calculation_changesets
-from actions.metric_configuration import get_operation_metric_configuration_changesets
 from debug import pretty_print_changeset
 
 
-@profile
 async def main(dry_run: bool, database_id: str):
     load_dotenv()
     api_token = os.getenv("API_TOKEN")

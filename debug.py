@@ -3,8 +3,8 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from actions.dtos import SchemaFieldUpdateDTO
-from actions.models import Changeset
+from scripts.dtos import SchemaFieldDTO
+from scripts.models import Changeset
 
 
 def op_type_to_style(t: str) -> str:
@@ -41,7 +41,7 @@ def diff_models(old: BaseModel, new: BaseModel, *, prefix: str = "") -> Text:
     return text
 
 
-def diff_schema_field(old: SchemaFieldUpdateDTO, new: SchemaFieldUpdateDTO) -> Text:
+def diff_schema_field(old: SchemaFieldDTO, new: SchemaFieldDTO) -> Text:
     text = Text()
 
     # Diff top-level fields (excluding type_parameters)

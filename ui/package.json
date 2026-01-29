@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@auth0/auth0-react": "^2.11.0",
     "@blueprintjs/core": "^6.6.0",
     "@blueprintjs/icons": "^6.5.0",
     "@blueprintjs/select": "^6.0.12",
@@ -17,12 +18,16 @@
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-query": "^5.90.18",
     "@tanstack/react-table": "^8.21.3",
+    "@types/d3-force": "^3.0.10",
+    "@xyflow/react": "^12.10.0",
+    "d3-force": "^3.0.0",
     "date-fns": "^4.1.0",
     "normalize.css": "^8.0.1",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-resizable-panels": "^4.4.1",
     "react-timeago": "^8.3.0",
+    "slim-react-router": "^0.6.0",
     "tailwindcss": "^4.1.18"
   },
   "devDependencies": {
@@ -38,5 +43,6 @@
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.46.4",
     "vite": "^7.2.4"
-  }
+  },
+  "packageManager": "pnpm@10.28.2+sha512.41872f037ad22f7348e3b1debbaf7e867cfd448f2726d9cf74c08f19507c31d2c8e7a11525b983febc2df640b5438dee6023ebb1f84ed43cc2d654d2bc326264"
 }

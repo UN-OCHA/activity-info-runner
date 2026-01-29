@@ -6,9 +6,9 @@ from typing import Dict, List, Tuple, Set
 from dotenv import load_dotenv
 from neo4j import GraphDatabase
 
-from actions.common import DatabaseTreeResourceType
 from api import ActivityInfoClient
 from api.client import BASE_URL
+from scripts.dtos import DatabaseTreeResourceType
 
 URI = "neo4j://localhost"
 PATH_RE = re.compile(r'\b[a-z0-9_]{3,}(?:\.[a-z0-9_]{3,})*\b', re.IGNORECASE)
@@ -109,7 +109,8 @@ async def main():
         try:
             schema = await client.api.get_form_schema(form_id)
         except Exception as e:
-            print(f"Warning: Failed to fetch schema for form {form_id}: {e}"); continue
+            print(f"Warning: Failed to fetch schema for form {form_id}: {e}");
+            continue
         form_labels[form_id] = schema.label
         fields_by_form[form_id] = {}
         for element in schema.elements:

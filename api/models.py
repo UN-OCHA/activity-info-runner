@@ -2,7 +2,7 @@ from typing import List, Optional, Dict, Any
 
 from pydantic import BaseModel, Field, ConfigDict
 
-from actions.dtos import SchemaFieldUpdateDTO
+from scripts.dtos import SchemaFieldDTO
 
 
 class OwnerRef(BaseModel):
@@ -79,19 +79,6 @@ class FormFields(BaseModel):
     last_edit_time: float = Field(alias='@lastEditTime')
 
 
-class OperationCalculationFormulasField(FormFields):
-    ref_order: int = Field(alias='REFORDER')
-    description: str = Field(alias='DESC')
-    apply: str = Field(alias='APPLY')
-
-    sys_prefix: str = Field(alias='SYSPREFIX')
-    sys_field: str = Field(alias='SYSFIELD')
-
-    filter: Optional[str] = Field(alias='FILTER')
-    formula: Optional[str] = Field(alias='FORMULA')
-    errors: Optional[str] = Field(alias='ERRS')
-
-
 class OperationMetricConfigurationField(FormFields):
     sort_order: str = Field(alias='SORTORDER')
     data_form_prefix: str = Field(alias='DFORM.SYSPREFIX')
@@ -105,6 +92,22 @@ class OperationMetricConfigurationField(FormFields):
     field_name: str = Field(alias='CCODE')
     reference_label: str = Field(alias='REFLABEL')
     errors: Optional[str] = Field(alias='ERRS')
+
+
+class OperationDataFormsField(FormFields):
+    system_prefix: str = Field(alias='SYSPREFIX')
+    entity_form_prefix: str = Field(alias='EFORM.SYSPREFIX')
+    entity_form_id: str = Field(alias='EFORM.@id')
+    # user_level: str = Field(alias='USERLEVEL')
+    # process: str = Field(alias='PROCESS')
+    # data_level: str = Field(alias='DATALEVEL')
+    composite_code: str = Field(alias='CCODE')
+
+
+class Database(BaseModel):
+    databaseId: str
+    label: str
+    description: str
 
 
 class TypeParameterLookupConfig(BaseModel):
@@ -126,4 +129,4 @@ class FormSchema(BaseModel):
     schemaVersion: int
     databaseId: str
     label: str
-    elements: List[SchemaFieldUpdateDTO]
+    elements: List[SchemaFieldDTO]

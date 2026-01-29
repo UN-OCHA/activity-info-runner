@@ -1,16 +1,22 @@
 import { NonIdealState } from "@blueprintjs/core";
 import { useQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Group, Panel, Separator } from "react-resizable-panels";
-import "./app.css";
-import AppNavbar from "./components/app-navbar";
-import ChangesetPanel from "./components/changeset-panel";
-import RunsList from "./components/runs-list";
-import type { WorkflowRun } from "./types";
-import { API_BASE } from "./utils";
+import {
+  Group,
+  Panel,
+  Separator,
+  usePanelCallbackRef,
+} from "react-resizable-panels";
+import "../app.css";
+import AppNavbar from "../components/app-navbar";
+import ChangesetPanel from "../components/changeset-panel";
+import RunsList from "../components/runs-list";
+import type { WorkflowRun } from "../types";
+import { API_BASE } from "../utils";
 
-function App() {
+function Home() {
   const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
+  const [changesetPanelRef, setChangesetPanelRef] = usePanelCallbackRef();
   const { data } = useQuery({
     queryKey: ["workflows"],
     queryFn: async () => {
@@ -44,6 +50,7 @@ function App() {
         <Separator className="border border-gray-200" />
         <Panel
           className="flex flex-col min-h-0"
+          panelRef={setChangesetPanelRef}
           minSize={300}
           collapsedSize={50}
           collapsible
@@ -52,6 +59,7 @@ function App() {
             <ChangesetPanel
               workflowId={selectedData.workflow_id}
               runId={selectedData.run_id}
+              panelRef={changesetPanelRef}
             />
           ) : (
             <NonIdealState
@@ -66,4 +74,4 @@ function App() {
   );
 }
 
-export default App;
+export default Home;

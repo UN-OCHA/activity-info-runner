@@ -118,6 +118,9 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - APP_VERSION=${APP_VERSION:-latest}
+      - BLOB_STORE_PATH=/blobs
+    volumes:
+      - blob-store:/blobs
     depends_on:
       - temporal
       - redis
@@ -132,6 +135,9 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
       - API_TOKEN=${API_TOKEN}
+      - BLOB_STORE_PATH=/blobs
+    volumes:
+      - blob-store:/blobs
     depends_on:
       temporal-create-namespace:
         condition: service_completed_successfully
@@ -158,3 +164,4 @@ networks:
 
 volumes:
   postgres_data:
+  blob-store:

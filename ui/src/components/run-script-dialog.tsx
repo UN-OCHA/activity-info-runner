@@ -4,7 +4,6 @@ import {
   DialogBody,
   DialogFooter,
   FormGroup,
-  InputGroup,
   MenuItem,
 } from "@blueprintjs/core";
 import { Select } from "@blueprintjs/select";
@@ -17,16 +16,26 @@ export default function RunScriptDialog() {
   const [databaseId, setDatabaseId] = useState<string | undefined>(undefined);
   const [scriptName, setScriptName] = useState<string | undefined>(undefined);
   const { data } = useQuery({
-    queryKey: ["scripts"],
+    queryKey: ["entities"],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE}/scripts`);
-      return (await res.json()) as string[];
+      const res = await fetch(`${API_BASE}/entities`);
+      return (await res.json()) as {
+        scripts: string[];
+        databases: {
+          databaseId: string;
+          label: string;
+          description: string;
+        }[];
+      };
     },
   });
+
+  const effectiveDatabaseId = databaseId ?? data?.databases[0]?.databaseId;
+
   const { mutate } = useMutation({
     mutationFn: async () =>
       await fetch(
-        `${API_BASE}/workflows/${scriptName}?database_id=${databaseId}`,
+        `${API_BASE}/workflows/${scriptName}?database_id=${effectiveDatabaseId}`,
         {
           method: "POST",
         },
@@ -36,6 +45,7 @@ export default function RunScriptDialog() {
       queryClient.invalidateQueries({
         queryKey: ["workflows"],
       });
+      setScriptName(undefined);
       toaster.show({
         message: "Script started successfully",
         intent: "success",
@@ -50,6 +60,10 @@ export default function RunScriptDialog() {
       });
     },
   });
+  const activeDatabase = data?.databases.find(
+    (d) => d.databaseId === effectiveDatabaseId,
+  );
+
   return (
     <>
       <Button
@@ -63,29 +77,55 @@ export default function RunScriptDialog() {
         onClose={() => setOpen(false)}
         title="Run script"
         icon="run-history"
+        lazy
       >
         <DialogBody>
           <FormGroup
-            label="Database ID"
-            labelFor="database-id-input"
-            helperText="The ActivityInfo database ID for which to execute the script"
+            label="Database"
+            helperText="The ActivityInfo database for which to execute the script"
           >
-            <InputGroup
-              id="database-id-input"
-              placeholder="Enter ID here..."
-              value={databaseId}
-              onValueChange={setDatabaseId}
-            />
+            <Select
+              activeItem={activeDatabase}
+              items={data?.databases ?? []}
+              itemRenderer={(item, { handleClick, handleFocus, modifiers }) => {
+                if (!modifiers.matchesPredicate) {
+                  return null;
+                }
+                return (
+                  <MenuItem
+                    active={modifiers.active}
+                    disabled={modifiers.disabled}
+                    key={item.databaseId}
+                    text={item.label}
+                    onClick={handleClick}
+                    onFocus={handleFocus}
+                    roleStructure="listoption"
+                    label={item.description}
+                  />
+                );
+              }}
+              onItemSelect={(item) => {
+                setDatabaseId(item.databaseId);
+              }}
+            >
+              <Button
+                text={
+                  activeDatabase ? activeDatabase.label : "Select a database"
+                }
+                endIcon="double-caret-vertical"
+                alignText="start"
+                fill
+              />
+            </Select>
           </FormGroup>
           {data && (
             <FormGroup
               label="Script name"
-              labelFor="database-id-input"
               helperText="The script to run for the selected database"
             >
               <Select
                 activeItem={scriptName}
-                items={data}
+                items={data.scripts}
                 itemRenderer={(
                   item,
                   { handleClick, handleFocus, modifiers },
@@ -114,6 +154,7 @@ export default function RunScriptDialog() {
                     scriptName ? titleCase(scriptName) : "Select a script type"
                   }
                   endIcon="double-caret-vertical"
+                  alignText="start"
                   fill
                 />
               </Select>
@@ -128,6 +169,9 @@ export default function RunScriptDialog() {
               text="Submit"
               intent="primary"
               onClick={() => mutate()}
+              disabled={
+                effectiveDatabaseId === undefined || scriptName === undefined
+              }
             />,
           ]}
         />

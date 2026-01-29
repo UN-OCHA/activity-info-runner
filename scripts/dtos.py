@@ -1,7 +1,13 @@
-from enum import StrEnum
+from enum import StrEnum, auto
 from typing import Optional, Dict, Any, List
 
 from pydantic import BaseModel, Field, field_validator
+
+
+class DatabaseTreeResourceType(StrEnum):
+    FORM = "FORM"
+    # We do not care about other resource types for our purposes
+    OTHER = auto()
 
 
 class FieldType(StrEnum):
@@ -62,7 +68,7 @@ class FieldTypeParametersUpdateDTO(BaseModel):
         return v
 
 
-class SchemaFieldUpdateDTO(BaseModel):
+class SchemaFieldDTO(BaseModel):
     model_config = {"populate_by_name": True}
     id: Optional[str] = Field(default=None, alias="id")
     code: Optional[str] = Field(default=None, alias="code")
@@ -103,6 +109,9 @@ class SchemaFieldUpdateDTO(BaseModel):
             return None
         return v
 
+    def __hash__(self):
+        return hash((self.id, self.code, self.label))
+
 
 class SchemaUpdateDTO(BaseModel):
     form_id: str = Field(alias="id")
@@ -110,7 +119,7 @@ class SchemaUpdateDTO(BaseModel):
     schema_version: str = Field(alias="schemaVersion")
     database_id: str = Field(alias="databaseId")
     parent_form_id: Optional[str] = Field(default=None, alias="parentFormId")
-    elements: List[SchemaFieldUpdateDTO] = Field(alias="elements")
+    elements: List[SchemaFieldDTO] = Field(alias="elements")
 
 
 class RecordUpdateDTO(BaseModel):

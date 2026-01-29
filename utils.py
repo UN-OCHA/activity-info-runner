@@ -1,5 +1,6 @@
-from typing import Dict, Any
 import logging
+from typing import Dict, Any
+
 
 def build_nested_dict(flat: Dict[str, Any]) -> Dict:
     """Converts a flat dictionary with dot-separated keys into a nested dictionary."""
@@ -14,6 +15,7 @@ def build_nested_dict(flat: Dict[str, Any]) -> Dict:
         d[parts[-1]] = value
     return nested
 
+
 class MemoryLogHandler(logging.Handler):
     def __init__(self):
         super().__init__()
@@ -24,6 +26,7 @@ class MemoryLogHandler(logging.Handler):
             self.records.append(self.format(record))
         except Exception:
             self.handleError(record)
+
 
 class CaptureLogs:
     def __init__(self, logger_name=None):
@@ -36,10 +39,6 @@ class CaptureLogs:
     def __enter__(self):
         self.logger.addHandler(self.handler)
         self.old_level = self.logger.level
-        # Capture INFO and above by default, or keep existing if it's lower (more verbose)
-        # But we generally want to capture what is being logged.
-        # If root logger, it usually has WARN default.
-        # We enforce INFO to ensure we get the application logs.
         self.logger.setLevel(logging.INFO)
         return self.handler
 

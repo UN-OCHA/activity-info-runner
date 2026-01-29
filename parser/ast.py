@@ -1,14 +1,18 @@
 from __future__ import annotations
-from dataclasses import dataclass
-from typing import List, Literal, Protocol, Any, Union, Set
+
 import math
 import re
+from dataclasses import dataclass
+from typing import List, Protocol, Any, Union, Set
 
 
 class IdentifierResolver(Protocol):
     async def resolve(self, identifier: "Identifier") -> Any: ...
+
     async def lookup(self, form_id: str, criteria: "Expr", expression: "Expr") -> Any: ...
+
     async def aggregate(self, function: str, form_id: str, criteria: "Expr", expression: "Expr") -> Any: ...
+
 
 # ---------- Expression Evaluation ----------
 
@@ -35,9 +39,10 @@ async def evaluate_expr(expr: Expr, resolver: IdentifierResolver) -> Any:
 
 class ExprNode:
     """Base class for all expression nodes."""
+
     def to_string(self) -> str:
         return str(self)
-    
+
     def identifiers(self) -> Set[str]:
         return set()
 
@@ -55,6 +60,7 @@ class Identifier(ExprNode):
     def identifiers(self) -> Set[str]:
         return {str(self)}
 
+
 @dataclass(frozen=True)
 class String(ExprNode):
     """Represents a string literal."""
@@ -62,6 +68,7 @@ class String(ExprNode):
 
     def __str__(self) -> str:
         return f'"{self.value}"'
+
 
 # ---------- Arithmetic / Logical ----------
 
@@ -83,7 +90,7 @@ class BinaryOp(ExprNode):
 
     async def evaluate(self, resolver: IdentifierResolver) -> Any:
         l = await evaluate_expr(self.left, resolver)
-        
+
         # Short-circuit logic
         if self.op == "&&":
             return bool(l) and bool(await evaluate_expr(self.right, resolver))
@@ -91,6 +98,8 @@ class BinaryOp(ExprNode):
             return bool(l) or bool(await evaluate_expr(self.right, resolver))
 
         r = await evaluate_expr(self.right, resolver)
+
+        if r is None: r = 0
 
         if self.op == "+":
             return l + r
@@ -127,6 +136,7 @@ class UnaryOp(ExprNode):
     def identifiers(self) -> Set[str]:
         return self.operand.identifiers()
 
+
 # ---------- Comparison ----------
 
 @dataclass(frozen=True)
@@ -146,7 +156,7 @@ class Comparison(ExprNode):
         if self.op == ">": return l > r
         if self.op == "<=": return l <= r
         if self.op == ">=": return l >= r
-        
+
         raise ValueError(f"Unknown comparison operator: {self.op}")
 
     def __str__(self) -> str:
@@ -166,7 +176,7 @@ class FunctionCall(ExprNode):
 
     async def evaluate(self, resolver: IdentifierResolver) -> Any:
         func_name = self.name.upper()
-        
+
         if func_name == "IF":
             if len(self.args) not in (2, 3):
                 raise ValueError("IF expects 2 or 3 arguments")
@@ -175,7 +185,7 @@ class FunctionCall(ExprNode):
                 return await evaluate_expr(self.args[1], resolver)
             elif len(self.args) == 3:
                 return await evaluate_expr(self.args[2], resolver)
-            return None 
+            return None
 
         if func_name == "LOOKUP":
             if len(self.args) != 3:
@@ -201,7 +211,7 @@ class FunctionCall(ExprNode):
                 raise ValueError("ISBLANK expects 1 argument")
             val = await evaluate_expr(self.args[0], resolver)
             return val is None or val == ""
-            
+
         if func_name == "COALESCE":
             if not self.args:
                 raise ValueError("COALESCE expects at least 1 argument")
@@ -229,7 +239,7 @@ class FunctionCall(ExprNode):
                 raise ValueError("FLOOR expects 1 argument")
             val = await evaluate_expr(self.args[0], resolver)
             return math.floor(val)
-        
+
         if func_name == "ROUND":
             if len(self.args) not in (1, 2):
                 raise ValueError("ROUND expects 1 or 2 arguments")
@@ -242,7 +252,7 @@ class FunctionCall(ExprNode):
         evaluated_args = []
         for arg in self.args:
             evaluated_args.append(await evaluate_expr(arg, resolver))
-        
+
         if func_name == "SUM":
             return sum(arg for arg in evaluated_args if isinstance(arg, (int, float)))
 
@@ -253,7 +263,7 @@ class FunctionCall(ExprNode):
             nums = [arg for arg in evaluated_args if isinstance(arg, (int, float))]
             if not nums: return 0
             return sum(nums) / len(nums)
-        
+
         if func_name == "MAX":
             if not evaluated_args: return None
             try:
@@ -273,7 +283,7 @@ class FunctionCall(ExprNode):
 
         if func_name == "COUNTDISTINCT":
             return len(set(arg for arg in evaluated_args if arg is not None and arg != ""))
-        
+
         if func_name == "TEXT":
             if len(self.args) != 1: raise ValueError("TEXT expects 1 argument")
             return str(evaluated_args[0])
@@ -292,10 +302,10 @@ class FunctionCall(ExprNode):
         if func_name == "TRIM":
             if len(self.args) != 1: raise ValueError("TRIM expects 1 argument")
             return str(evaluated_args[0]).strip()
-        
+
         if func_name == "CONCAT":
             return "".join(str(arg) for arg in evaluated_args)
-        
+
         if func_name == "LEFT":
             if len(self.args) != 2: raise ValueError("LEFT expects 2 arguments")
             text = str(evaluated_args[0])
@@ -314,7 +324,7 @@ class FunctionCall(ExprNode):
             start = int(evaluated_args[1])
             n = int(evaluated_args[2])
             if start < 1: start = 1
-            return text[start-1 : start-1+n]
+            return text[start - 1: start - 1 + n]
 
         if func_name == "SEARCH":
             if len(self.args) not in (2, 3): raise ValueError("SEARCH expects 2 or 3 arguments")
@@ -329,13 +339,13 @@ class FunctionCall(ExprNode):
                 return idx + 1
             except Exception:
                 return None
-        
+
         if func_name == "REGEXMATCH":
             if len(self.args) != 2: raise ValueError("REGEXMATCH expects 2 arguments")
             text = str(evaluated_args[0])
             pattern = str(evaluated_args[1])
             return bool(re.search(pattern, text))
-        
+
         if func_name == "REGEXEXTRACT":
             if len(self.args) != 2: raise ValueError("REGEXEXTRACT expects 2 arguments")
             text = str(evaluated_args[0])

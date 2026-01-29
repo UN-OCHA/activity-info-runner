@@ -1,156 +1,134 @@
 # Activity Info Runner
 
-A CLI tool for processing ActivityInfo internal logframe configurations. This tool automates the application of calculated field formulas, handling both internal schema updates and external record value calculations.
+A comprehensive platform for executing automated scripts and workflows against ActivityInfo databases. It leverages **Temporal** for robust workflow orchestration, providing reliable execution, retries, and comprehensive history tracking.
+
+The system is designed to automate complex logic such as:
+- **Calculation Formulas:** Applying Excel-like formulas to fields within or across forms.
+- **Metric Configuration:** Managing the lifecycle of standardized metric fields.
+- **Schema & Record Sync:** Calculating diffs between current and desired states and applying changes efficiently.
+
+## Architecture
+
+The project is built as a microservices architecture managed by Docker Compose:
+
+*   **UI (Frontend):** A React-based dashboard (using BlueprintJS) to view available scripts, trigger runs, inspect execution logs, view changeset diffs (Database, Form, Field, Record), and analyze timing performance.
+*   **Server (Backend):** A FastAPI service that acts as the gateway. It lists entities, starts Temporal workflows, and retrieves workflow status/history for the UI.
+*   **Worker:** A Python Temporal Worker that executes the actual business logic (activities and workflows). It connects to ActivityInfo, processes data, and generates changesets.
+*   **Temporal Server:** The core orchestration engine ensuring workflow reliability.
+*   **PostgreSQL:** Persistence layer for Temporal.
+*   **Redis:** Caching layer for API responses and blob storage for large payloads.
 
 ## Features
 
--   **Internal Calculations:** Updates form schema formulas based on configuration.
--   **External Calculations:** Fetches records, evaluates formulas locally, and generates updates for records.
--   **Metric Configuration Management:** Automates the lifecycle of metric fields across forms. Based on a central configuration, it creates and maintains a standard set of fields (Manual, Internal Calc, External Calc, Final) for each metric, ensuring consistent formulas and structure.
--   **Dry Run Mode:** Preview changes without applying them.
--   **Expression Parsing:** Custom parser for ActivityInfo-style expressions.
+-   **Workflow Management:** Reliable execution of long-running scripts with automatic retries and failure handling.
+-   **Plan/Apply Pattern:** Scripts first generate a "Materialized Boundary" (current state) and a "Desired Schema". The system then calculates a minimal "Changeset" (Diff) to transition the database to the desired state.
+-   **Visual Diff:** The UI provides a detailed, color-coded diff view for all generated actions (Creates, Updates, Deletes) across Databases, Forms, Fields, and Records.
+-   **Performance Analysis:** detailed timing charts breakdown the duration of every activity in a workflow run.
+-   **Caching:** Intelligent caching of API responses and workflow results to optimize performance and reduce API load.
+-   **Large Payload Support:** Uses a local blob store pattern to handle massive datasets that exceed standard RPC message limits.
 
 ## Prerequisites
 
--   Python 3.11 or higher
--   [uv](https://github.com/astral-sh/uv) (recommended for dependency management)
+-   **Docker** & **Docker Compose**
+-   **ActivityInfo API Token** (for accessing your databases)
 
-## Installation
+## Getting Started
 
-1.  Clone the repository:
+### 1. Setup Environment
+
+Create a `.env` file in the root directory:
+
+```bash
+# ActivityInfo API Token
+API_TOKEN=your_secret_api_token_here
+
+# Temporal & DB Config (Defaults usually fine for dev)
+TEMPORAL_VERSION=1.29.1
+TEMPORAL_ADMINTOOLS_VERSION=1.29.1-tctl-1.18.4-cli-1.5.0
+POSTGRESQL_VERSION=16
+POSTGRES_PASSWORD=temporal
+POSTGRES_USER=temporal
+```
+
+### 2. Run the Stack
+
+Start all services in detached mode:
+
+```bash
+docker-compose up --build -d
+```
+
+This will spin up:
+- Temporal Server & Web UI (Port 8080)
+- PostgreSQL & Redis
+- AIR Server (API)
+- AIR Worker
+- AIR Frontend (UI)
+
+### 3. Access the Dashboard
+
+Open your browser and navigate to:
+
+**http://localhost:8080**
+
+From here you can:
+1.  See a list of your ActivityInfo databases.
+2.  Select a script to run (e.g., `OperationCalculationFormulas`).
+3.  Click "Run script".
+4.  Watch the workflow progress in real-time.
+5.  Inspect the resulting Actions, Logs, and Timings.
+
+## Development
+
+### Project Structure
+
+-   `api/`: FastAPI backend and ActivityInfo client.
+-   `scripts/`: Contains the logic for specific scripts (e.g., `OperationCalculationFormulas`).
+    -   `boundaries.py`: Logic to fetch the "Current State" (Materialization).
+    -   `changeset.py`: Logic to compare states and generate actions.
+    -   `models.py`: Pydantic models for the internal schema representation.
+-   `ui/`: React frontend (Vite + BlueprintJS).
+-   `worker.py`: Entry point for the Temporal Worker.
+-   `server.py`: Entry point for the FastAPI Server.
+
+### Running Locally (Without Docker for Worker/Server)
+
+You can run the Python components locally against the Dockerized infrastructure (Temporal/Redis/PG) for faster dev cycles.
+
+1.  **Start Infrastructure:**
     ```bash
-    git clone <repository-url>
-    cd activity-info-runner
+    docker-compose up -d postgresql temporal temporal-admin-tools temporal-create-namespace redis
     ```
-
-2.  Install dependencies using `uv`:
+2.  **Install Dependencies:**
     ```bash
     uv sync
     ```
+3.  **Run Worker:**
+    ```bash
+    source .venv/bin/activate
+    python worker.py
+    ```
+4.  **Run Server:**
+    ```bash
+    source .venv/bin/activate
+    uvicorn server:app --reload --port 8000
+    ```
+5.  **Run UI:**
+    ```bash
+    cd ui
+    npm install
+    npm run dev
+    ```
 
-## Configuration
+## Scripts
 
-Create a `.env` file in the root directory with your ActivityInfo API token:
+### OperationCalculationFormulas
 
-```env
-API_TOKEN=your_api_token_here
-```
+This script manages calculated fields based on a specific configuration form (`0.1.6`).
+-   **Internal Calc:** Updates field formulas in the schema based on configuration.
+-   **External Calc:** Fetches records, evaluates formulas locally using a custom parser, and updates the record values in ActivityInfo.
 
-## Usage
+## Troubleshooting
 
-Run the tool using the `main.py` script via `uv`.
-
-### Basic Run
-
-```bash
-uv run main.py
-```
-
-### Dry Run
-
-Preview changes without applying them:
-
-```bash
-uv run main.py --dry-run
-```
-
-### Debug Mode
-
-Enable verbose logging:
-
-```bash
-uv run main.py --debug
-```
-
-### Combined Options
-
-```bash
-uv run main.py --dry-run --debug
-```
-
-## Running Tests
-
-This project uses `pytest` for testing.
-
-To run all tests:
-```bash
-uv run pytest
-```
-
-To run tests with coverage:
-```bash
-uv run pytest --cov=.
-```
-
-## Project Structure
-
--   `main.py`: CLI entry point.
--   `actions/`: Core logic packages.
-    -   `calculation_formulas.py`: Logic for calculation formulas.
-    -   `metric_configuration.py`: Logic for metric field configuration.
--   `api/`: ActivityInfo API client and models.
--   `parser/`: Expression parser and evaluator using `lark`.
--   `debug.py`: Utilities for pretty-printing changesets.
-
-## Language Syntax
-
-The tool supports a custom expression language similar to Excel formulas.
-
-### Operators
-
-| Type       | Operators                       |
-|------------|---------------------------------|
-| Arithmetic | `+`, `-`, `*`, `/`              |
-| Comparison | `==`, `!=`, `<`, `>`, `<=`, `>=` |
-| Logical    | `&&` (AND), \|\| (OR), `!` (NOT) |
-
-### Functions
-
-#### Logical & Control Flow
-- `IF(condition, true_value, [false_value])`
-- `ANY(value1, value2, ...)` - Returns true if any argument is true.
-- `COALESCE(value1, value2, ...)` - Returns the first non-null/non-empty value.
-
-#### Math
-- `SUM(number1, ...)`
-- `AVERAGE(number1, ...)`
-- `MIN(number1, ...)`
-- `MAX(number1, ...)`
-- `ROUND(number, [digits])`
-- `CEIL(number)`
-- `FLOOR(number)`
-- `POWER(base, exponent)`
-- `ISNUMBER(value)`
-
-#### Text
-- `CONCAT(text1, text2, ...)`
-- `LEFT(text, number_of_chars)`
-- `RIGHT(text, number_of_chars)`
-- `MID(text, start_position, number_of_chars)`
-- `LOWER(text)`
-- `TRIM(text)`
-- `TEXT(value)` - Converts value to string.
-- `VALUE(text)` - Converts text to number.
-- `SEARCH(find_text, within_text, [start_position])`
-- `ISBLANK(value)`
-
-#### Aggregation
-- `COUNT(value1, ...)` - Counts non-empty values.
-- `COUNTDISTINCT(value1, ...)` - Counts unique non-empty values.
-
-#### Regex
-- `REGEXMATCH(text, pattern)`
-- `REGEXEXTRACT(text, pattern)`
-- `REGEXREPLACE(text, pattern, replacement)`
-
-#### Advanced & Cross-Form
-- `LOOKUP(form_id, criteria, expression)` - Finds the first record in `form_id` matching `criteria` and evaluates `expression` against it.
-- `AGGREGATE(function, form_id, criteria, expression)` - Aggregates `expression` values from all records in `form_id` matching `criteria`. Supported functions: `SUM`, `COUNT`, `AVERAGE`, `MIN`, `MAX`.
-
-### Originating Record Reference
-
-When using cross-form functions like `LOOKUP` or `AGGREGATE`, you can use the `@` prefix to refer to fields in the record currently being processed (the "originating" record).
-
-Example:
-`LOOKUP("target_form_id", category == @category, price)`
-*This looks up the price in "target_form_id" where the category matches the current record's category.*
+-   **"Message larger than max"**: If you encounter this error, ensure the Blob Store volume is correctly mounted and the `blob_store.py` logic is being used for passing large datasets between activities.
+-   **Worker not connecting**: Ensure `TEMPORAL_HOST` is set correctly in your `.env` or environment variables (default `localhost:7233` for local run, `temporal:7233` inside docker).

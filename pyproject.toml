@@ -1,7 +1,7 @@
 [project]
 name = "activity-info-runner"
 version = "0.1.0"
-description = "Add your description here"
+description = "A comprehensive platform for executing automated scripts and workflows against ActivityInfo databases."
 requires-python = ">=3.11"
 dependencies = [
     "httpx",
@@ -13,7 +13,8 @@ dependencies = [
     "fastapi",
     "uvicorn",
     "temporalio",
-    "neo4j"
+    "neo4j",
+    "aiofiles>=25.1.0",
 ]
 
 [tool.pytest.ini_options]

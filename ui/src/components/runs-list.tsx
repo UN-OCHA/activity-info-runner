@@ -45,14 +45,12 @@ export default function RunsList({
             <EntityTitle
               icon="automatic-updates"
               title={
-                <span className="font-bold">{titleCase(run.params.name)}</span>
+                <span className="font-bold">{titleCase(run.type ?? "")}</span>
               }
               subtitle={
                 <>
                   On database{" "}
-                  <span className="bp6-monospace-text">
-                    {run.params.database_id}
-                  </span>
+                  <span className="bp6-monospace-text">{run.params}</span>
                 </>
               }
               tags={

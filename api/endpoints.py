@@ -1,13 +1,12 @@
 from typing import Any, List
 
-from aiocache import cached
-from aiocache.serializers import PickleSerializer
 from pydantic import ValidationError
 
-from actions.dtos import RecordUpdateDTO
 from api.cache import auto_cache
 from api.client import ActivityInfoHTTPClient, APIError
-from api.models import OperationCalculationFormulasField, DatabaseTree, FormSchema, OperationMetricConfigurationField
+from api.models import DatabaseTree, FormSchema, OperationMetricConfigurationField, \
+    OperationDataFormsField, Database
+from scripts.dtos import RecordUpdateDTO
 
 RawFormPayload = dict[str, Any]
 
@@ -30,29 +29,14 @@ class ActivityInfoEndpoints:
     async def get_form(self, form_id: str) -> List[RawFormPayload]:
         return await self._http.request("GET", f"form/{form_id}/query")
 
-    @cached(ttl=20, serializer=PickleSerializer())
+    # @cached(ttl=20, serializer=PickleSerializer())
+    @auto_cache(ttl=36000, model=FormSchema)
     async def get_form_schema(self, form_id: str) -> FormSchema:
         raw = await self._http.request("GET", f"form/{form_id}/schema")
         try:
             return FormSchema.model_validate(raw)  # parse dict into Pydantic model
         except ValidationError as e:
             raise APIError("Response does not match FormSchema") from e
-
-    async def get_operation_calculation_formulas_fields(
-            self,
-            form_id: str,
-    ) -> List[OperationCalculationFormulasField]:
-        raw = await self.get_form(form_id, _bypass_cache=True)
-        try:
-            return [
-                OperationCalculationFormulasField.model_validate(item)
-                if isinstance(item, dict) else item
-                for item in raw
-            ]
-        except ValidationError as e:
-            raise APIError(
-                "Form does not match OperationCalculationFormulasField schema"
-            ) from e
 
     async def get_operation_metric_configuration_fields(
             self,
@@ -68,6 +52,37 @@ class ActivityInfoEndpoints:
         except ValidationError as e:
             raise APIError(
                 "Form does not match OperationMetricConfigurationField schema"
+            ) from e
+
+    @auto_cache(ttl=36000, model=OperationDataFormsField)
+    async def get_operation_data_forms_fields(
+            self,
+            form_id: str,
+    ) -> List[OperationDataFormsField]:
+        raw = await self.get_form(form_id, _bypass_cache=True)
+        try:
+            return [
+                OperationDataFormsField.model_validate(item)
+                if isinstance(item, dict) else item
+                for item in raw
+            ]
+        except ValidationError as e:
+            raise APIError(
+                "Form does not match OperationDataFormsField schema"
+            ) from e
+
+    @auto_cache(ttl=36000, model=Database)
+    async def get_user_databases(self) -> List[Database]:
+        raw = await self._http.request("GET", "databases")
+        try:
+            return [
+                Database.model_validate(item)
+                if isinstance(item, dict) else item
+                for item in raw
+            ]
+        except ValidationError as e:
+            raise APIError(
+                "Item does not match Database schema"
             ) from e
 
     async def update_form_records(self, records: List[RecordUpdateDTO]) -> None:

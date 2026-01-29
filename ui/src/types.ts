@@ -6,15 +6,13 @@ export interface WorkflowRun {
   start_time: string; // ISO datetime
   close_time: string | null;
 
-  params: {
-    name: string;
-    database_id: string;
-  };
+  params: string[];
 
   results: {
-    field_actions: FieldAction[];
-    record_actions: RecordAction[];
-    logs: string[] | null;
+    changeset: Changeset;
+    logs: string[];
+    warnings?: string[] | null;
+    materialized_boundary?: MaterializedBoundary;
   } | null;
 
   timings:
@@ -28,7 +26,41 @@ export interface WorkflowRun {
     | null;
 }
 
-interface FieldDefinition {
+export interface Changeset {
+  database_actions: DatabaseAction[];
+  field_actions: FieldAction[];
+  form_actions: FormAction[];
+  record_actions: RecordAction[];
+}
+
+export interface DatabaseAction {
+  TYPE: string;
+  database_id: string;
+  origin: string;
+}
+
+export interface FormAction {
+  TYPE: string;
+  form_id: string;
+  form_name: string;
+  database_id: string;
+  origin: string;
+}
+
+export interface FieldAction {
+  TYPE: string;
+  database_id: string;
+  field_id: string;
+  form_id: string;
+  form_name: string;
+  order: number;
+  origin: string;
+
+  old_field: FieldDefinition;
+  new_field: FieldDefinition;
+}
+
+export interface FieldDefinition {
   id: string;
   code: string;
   label: string;
@@ -39,20 +71,7 @@ interface FieldDefinition {
   table_visible: boolean;
   relevance_condition: string | null;
   validation_condition: string | null;
-  type_parameters: unknown | null;
-}
-
-export interface FieldAction {
-  TYPE: string;
-  database_id: string;
-  field_code: string;
-  form_id: string;
-  form_name: string;
-  order: number;
-  origin: string;
-
-  old: FieldDefinition;
-  new: FieldDefinition;
+  type_parameters: Record<string, unknown> | null;
 }
 
 export interface RecordAction {
@@ -61,12 +80,30 @@ export interface RecordAction {
   parent_record_id: string | null;
 
   form_id: string;
-  form_name: string;
 
   field_code: string;
-  field_value: number;
-  old_field_value: number;
+  field_value: string;
+  old_field_value: unknown;
 
   order: number;
   origin: string;
+}
+
+export interface MaterializedBoundary {
+  databases: MaterializedDatabase[];
+}
+
+export interface MaterializedDatabase {
+  databaseId: string;
+  description: string;
+  forms: MaterializedForm[];
+  label: string;
+}
+
+export interface MaterializedForm {
+  id: string;
+  label: string;
+  databaseId: string;
+  records: number;
+  fields: FieldDefinition[];
 }

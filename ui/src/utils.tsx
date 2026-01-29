@@ -10,6 +10,7 @@ export const toaster: Toaster = await OverlayToaster.create({
 export const queryClient = new QueryClient();
 
 export const titleCase = (s: string) =>
-  s.replace(/^_*(.)|_+(.)/g, (_s, c, d) =>
-    c ? c.toUpperCase() : " " + d.toUpperCase(),
-  );
+  s
+    .replace(/([A-Z])/g, " $1")
+    .replace(/^./, (c) => c.toUpperCase())
+    .trim();
