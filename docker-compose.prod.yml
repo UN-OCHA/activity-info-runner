@@ -119,6 +119,7 @@ services:
       - REDIS_PORT=6379
       - APP_VERSION=${APP_VERSION:-latest}
       - BLOB_STORE_PATH=/blobs
+      - API_TOKEN=${API_TOKEN}
     volumes:
       - blob-store:/blobs
     depends_on:
