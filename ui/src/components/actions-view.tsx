@@ -118,7 +118,7 @@ export default function ActionsView({
                 />
               ) : (
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                <GenericTable data={tab.data} columns={tab.columns as any} />
+                <GenericTable data={tab.data as any} columns={tab.columns as any} />
               )
             }
           />
